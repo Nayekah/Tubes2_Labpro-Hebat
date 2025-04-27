@@ -1,14 +1,21 @@
 version: '3.8'
 
 services:
-  nextjs:
+  frontend:
     build:
-      context: .
+      context: ./src/frontend
       dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: LabproHebat-fe
     ports:
-      - "6969:6969"
-    volumes:
-      - ./src/frontend:/app
-      - /app/node_modules
+      - "2211:2211"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
