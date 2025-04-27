@@ -142,25 +142,9 @@ export default function Home() {
   }, [showVolumeBar])
 
   useEffect(() => {
-    const playAudio = () => {
-      if (audioRef.current) {
-        audioRef.current.volume = volume
-        audioRef.current.play().catch(err => {
-          console.log("Autoplay prevented:", err)
-        })
-        setIsPlaying(true)
-      }
-    }
-
-    const handleInteraction = () => {
-      playAudio()
-      document.removeEventListener("click", handleInteraction)
-    }
-
-    document.addEventListener("click", handleInteraction)
-
-    return () => {
-      document.removeEventListener("click", handleInteraction)
+    // Only update the volume when it changes
+    if (audioRef.current) {
+      audioRef.current.volume = volume
     }
   }, [volume])
 

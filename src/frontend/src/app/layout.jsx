@@ -2,6 +2,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { LanguageProvider } from "@/components/language-context"
+import LoadingWrapper from "@/components/loading-wrapper"
 import localFont from 'next/font/local'
 
 const inter = Inter({ subsets: ["latin"] })
@@ -30,7 +31,9 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <LanguageProvider>
-            {children}
+            <LoadingWrapper>
+              {children}
+            </LoadingWrapper>
           </LanguageProvider>
         </ThemeProvider>
       </body>
