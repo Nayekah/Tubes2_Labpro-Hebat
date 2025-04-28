@@ -2,10 +2,10 @@
 
 import React, { useRef } from "react";
 import dynamic from "next/dynamic";
-import Navbar from "./components/canvas.js";
+import Navbar from "../components/navbar.jsx";
 
 // Dynamically import KonvaCanvas to avoid SSR issues with window
-const KonvaCanvas = dynamic(() => import("./components/navbar.js"), {
+const KonvaCanvas = dynamic(() => import("./components/canvas.js"), {
   ssr: false,
 });
 
@@ -72,7 +72,7 @@ export default function Home() {
 
   return (
     <div className="app-container">
-      <Navbar onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} onReset={handleReset} />
+      <Navbar />
       <KonvaCanvas stageRef={stageRef} />
     </div>
   );
