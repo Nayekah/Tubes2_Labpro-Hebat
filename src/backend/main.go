@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
 )
 
@@ -54,6 +56,67 @@ type Response struct {
 var recipes map[string][]pair = make(map[string][]pair)
 var imagesLink map[string]string = make(map[string]string)
 var distances map[string]int = make(map[string]int)
+
+// runScraperProcess executes the scraper.go file to generate data
+func runScraperProcess() error {
+	fmt.Println("Running scraper to generate data files...")
+
+	// Create data directory if it doesn't exist
+	dataDir := filepath.Dir(RECIPES_PATH)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Get the current directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Look for scraper.go in the usual locations
+	scraperLocs := []string{
+		filepath.Join(currentDir, "scraper.go"),
+		filepath.Join(currentDir, "backend", "scraper.go"),
+		filepath.Join(currentDir, "..", "backend", "scraper.go"),
+		filepath.Join(currentDir, "backend", "scraper", "scraper.go"),
+		filepath.Join(currentDir, "..", "backend", "scraper", "scraper.go"),
+	}
+
+	var scraperPath string
+	for _, loc := range scraperLocs {
+		if _, err := os.Stat(loc); err == nil {
+			scraperPath = loc
+			break
+		}
+	}
+
+	if scraperPath == "" {
+		return fmt.Errorf("scraper.go not found in expected locations")
+	}
+
+	fmt.Printf("Found scraper at: %s\n", scraperPath)
+
+	// Run go run scraper.go
+	cmd := exec.Command("go", "run", scraperPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run scraper: %w", err)
+	}
+
+	// Verify data files were created
+	if _, err := os.Stat(RECIPES_PATH); os.IsNotExist(err) {
+		return fmt.Errorf("scraper did not create recipes file at %s", RECIPES_PATH)
+	}
+
+	if _, err := os.Stat(IMAGES_PATH); os.IsNotExist(err) {
+		return fmt.Errorf("scraper did not create images file at %s", IMAGES_PATH)
+	}
+
+	fmt.Println("Scraper completed successfully")
+	return nil
+}
 
 func readRecipes() {
 	fmt.Println("Reading recipes from", RECIPES_PATH)
@@ -147,6 +210,18 @@ func findAllDistances() {
 func INITIALIZE() {
 	if INITIALIZED == false {
 		INITIALIZED = true
+
+		// Check if data files exist, if not run scraper
+		_, errRecipes := os.Stat(RECIPES_PATH)
+		_, errImages := os.Stat(IMAGES_PATH)
+
+		if os.IsNotExist(errRecipes) || os.IsNotExist(errImages) {
+			fmt.Println("Data files not found, running scraper...")
+
+			if err := runScraperProcess(); err != nil {
+				log.Fatalf("Failed to run scraper: %v", err)
+			}
+		}
 
 		var wg sync.WaitGroup
 		doneFuncA := make(chan struct{})
@@ -385,5 +460,22 @@ func main() {
 	http.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Server is working"))
 	})
+
+	fmt.Println("Server started on port 8080")
 	http.ListenAndServe(":8080", nil)
+}
+
+// Helper functions
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
