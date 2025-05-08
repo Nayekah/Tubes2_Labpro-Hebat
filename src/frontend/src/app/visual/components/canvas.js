@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Stage, Layer, Image, Text, Line } from "react-konva";
+import DropdownButton from "@/app/components/dropdown.jsx";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -11,6 +12,7 @@ export default function KonvaCanvas() {
   const [targetElement, setTargetElement] = useState("");
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  const [isOpen, setIsOpen] = useState(false);
 
   // Load images when target element changes
   const fetchImages = async (e) => {
@@ -109,21 +111,19 @@ export default function KonvaCanvas() {
   };
 
   return (
+    
     <div className="relative">
-      {/* Control panel */}
-      <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
-        <form onSubmit={fetchImages} className="flex gap-2">
-          <input
-            type="text"
-            value={targetElement}
-            onChange={(e) => setTargetElement(e.target.value)}
-            placeholder="Target element"
-            className="border border-gray-300 rounded px-2 py-1 text-sm"
-          />
-          <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm" disabled={loading}>
-            {loading ? "Loading..." : "Fetch"}
-          </button>
-        </form>
+      {/* {Control panel} */}
+      <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md group">
+      <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        Method Selection Option
+      </button>
+
+      <div className="absolute mt-2 w-40 bg-white border rounded shadow-lg z-10 hidden group-hover:block">
+        <a href="#" className="block px-4 py-2 hover:bg-gray-100">BFS</a>
+        <a href="#" className="block px-4 py-2 hover:bg-gray-100">DFS</a>
+        <a href="#" className="block px-4 py-2 hover:bg-gray-100">Bidirectional</a>
+      </div>
       </div>
 
       {/* Konva Stage */}
