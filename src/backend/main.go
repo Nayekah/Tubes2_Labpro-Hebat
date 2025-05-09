@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 var INITIALIZED bool = false
@@ -51,6 +52,11 @@ type LineInfo struct {
 type Response struct {
 	Images []ImageInfo `json:"images"`
 	Lines  []LineInfo  `json:"lines"`
+}
+
+type requestData struct {
+	Target string `json:"target"`
+	// nanti tambahin tambahin terserah
 }
 
 var recipes map[string][]pair = make(map[string][]pair)
@@ -248,40 +254,6 @@ func INITIALIZE() {
 	}
 }
 
-type requestData struct {
-	Target string `json:"target"`
-	// nanti tambahin tambahin terserah
-}
-
-func requestHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-	if r.Method == http.MethodOptions {
-		// Handle preflight
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	var data requestData
-	err := json.NewDecoder(r.Body).Decode(&data)
-	fmt.Println("Searching for target:", data.Target)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	images, lines := singleBFS(data.Target)
-
-	response := Response{
-		Images: images,
-		Lines:  lines,
-	}
-	//fmt.Println(response)
-	json.NewEncoder(w).Encode(response)
-}
-
 func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 	///make a 2d vector of string
 	existingTree := make([]*tree, 0)
@@ -351,39 +323,6 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 		}
 	}
 
-	// output testing
-	// spacing := 10
-	// for i := len(existingTree) - 1; i >= 0; i-- {
-	// 	if existingTree[i].depth == maxDepth {
-	// 		continue
-	// 	}
-
-	// 	j := i
-
-	// 	for existingTree[j].depth == existingTree[i].depth {
-	// 		j--
-	// 		if j < 0 {
-	// 			break
-	// 		}
-	// 	}
-	// 	j = j + 1
-
-	// 	for k := j; k <= i; k++ {
-	// 		if k == j {
-	// 			format := fmt.Sprintf("%%%ds", (spacing+1)/2) // Note: %% to escape %
-	// 			fmt.Printf(format, existingTree[k].now)
-	// 		} else {
-	// 			format := fmt.Sprintf("%%%ds", spacing) // Note: %% to escape %
-	// 			fmt.Printf(format, existingTree[k].now)
-	// 		}
-	// 	}
-
-	// 	fmt.Println("")
-	// 	spacing *= 2
-
-	// 	i = j
-	// }
-
 	spacing := 100
 	images := make([]ImageInfo, 0)
 	//send to json
@@ -452,17 +391,64 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 	return images, lines
 }
 
+// API handlers
+func handleSearch(c *gin.Context) {
+	var data requestData
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fmt.Println("Searching for target:", data.Target)
+	images, lines := singleBFS(data.Target)
+
+	response := Response{
+		Images: images,
+		Lines:  lines,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func handleTest(c *gin.Context) {
+	c.String(http.StatusOK, "Server is working")
+}
+
 func main() {
+	// Initialize data
 	INITIALIZE()
 
-	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("data/images"))))
-	http.HandleFunc("/api", requestHandler)
-	http.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Server is working"))
+	// Set Gin to release mode for production
+	gin.SetMode(gin.ReleaseMode)
+
+	// Create a default Gin router
+	r := gin.Default()
+
+	// Configure CORS middleware
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, Authorization")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
 	})
 
-	fmt.Println("Server started on port 8080")
-	http.ListenAndServe(":8080", nil)
+	// Serve static files
+	r.Static("/images", "./data/images")
+
+	// API routes
+	r.POST("/api", handleSearch)
+	r.GET("/test", handleTest)
+
+	// Start the server
+	port := ":8080"
+	fmt.Printf("Server started on port%s\n", port)
+	r.Run(port)
 }
 
 // Helper functions
