@@ -20,14 +20,15 @@ RUN apk --no-cache add ca-certificates
 
 COPY --from=builder /app/main .
 
-RUN mkdir -p /app/data /app/scraper
+RUN mkdir -p /app/data /app/data/images
 
-COPY --from=builder /app/scraper /app/scraper
+COPY --from=builder /app/scraper.go .
 
 COPY --from=builder /app/data /app/data
 
 EXPOSE 8080
 
 ENV GIN_MODE=release
+ENV PORT=8080
 
 CMD ["./main"]

@@ -63,6 +63,18 @@ var recipes map[string][]pair = make(map[string][]pair)
 var imagesLink map[string]string = make(map[string]string)
 var distances map[string]int = make(map[string]int)
 
+// getImageURL dynamically generates the image URL based on the request host
+func getImageURL(c *gin.Context, imageName string) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+
+	host := c.Request.Host
+
+	return fmt.Sprintf("%s://%s/images/%s_2.svg", scheme, host, imageName)
+}
+
 // runScraperProcess executes the scraper.go file to generate data
 func runScraperProcess() error {
 	fmt.Println("Running scraper to generate data files...")
@@ -206,7 +218,6 @@ func findAllDistances() {
 
 				if min_distance != 1000000 {
 					distances[key] = min_distance
-					//fmt.Println(key, " : ", distances[key])
 				}
 			}
 		}
@@ -254,7 +265,7 @@ func INITIALIZE() {
 	}
 }
 
-func singleBFS(target string) ([]ImageInfo, []LineInfo) {
+func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 	///make a 2d vector of string
 	existingTree := make([]*tree, 0)
 
@@ -269,8 +280,6 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 	var countNotPadding int = 0
 	for len(queue) > 0 {
 		node := queue[0]
-
-		//fmt.Println("Depth: ", node.depth, " Count: ", node.depthCount, " Node: ", node.now, " countNotPadding: ", countNotPadding)
 
 		if maxDepth < node.depth {
 			count = 0
@@ -342,12 +351,11 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 		j = j + 1
 
 		for k := j; k <= i; k++ {
-			//fmt.Println("Item = ", existingTree[k].now, " Link = ", imagesLink[existingTree[k].now])
 			if k == j {
 				existingTree[k].posX = spacing / 2
 				existingTree[k].posY = (maxDepth-existingTree[k].depth)*100 - 100
 				images = append(images, ImageInfo{
-					Link: "http://localhost:8080/images/" + existingTree[k].now + "_2.svg",
+					Link: getImageURL(c, existingTree[k].now),
 					Row:  (maxDepth-existingTree[k].depth)*100 - 100,
 					Col:  spacing / 2,
 					Name: existingTree[k].now,
@@ -358,7 +366,7 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 				existingTree[k].posY = (maxDepth-existingTree[k].depth)*100 - 100
 
 				images = append(images, ImageInfo{
-					Link: "http://localhost:8080/images/" + existingTree[k].now + "_2.svg",
+					Link: getImageURL(c, existingTree[k].now),
 					Row:  (maxDepth-existingTree[k].depth)*100 - 100,
 					Col:  spacing/2 + spacing*existingTree[k].depthCount,
 					Name: existingTree[k].now,
@@ -400,7 +408,7 @@ func handleSearch(c *gin.Context) {
 	}
 
 	fmt.Println("Searching for target:", data.Target)
-	images, lines := singleBFS(data.Target)
+	images, lines := singleBFS(c, data.Target)
 
 	response := Response{
 		Images: images,
