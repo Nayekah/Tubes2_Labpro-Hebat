@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Stage, Layer, Image, Text, Line } from "react-konva";
-import DropdownButton from "@/app/components/dropdown.jsx";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -13,6 +12,7 @@ export default function KonvaCanvas() {
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedMethod, setMethod] = useState("BFS");
 
   // Load images when target element changes
   const fetchImages = async (e) => {
@@ -109,6 +109,12 @@ export default function KonvaCanvas() {
 
     return adjustedX + imgWidth > 0 && adjustedX < viewWidth && adjustedY + imgHeight > 0 && adjustedY < viewHeight;
   };
+
+  const handleSelect = (text) => {
+    setSelectedText(text);
+  }
+
+  const options = ["BFS", "DFS", "Bidirectiona;"]
 
   return (
     
