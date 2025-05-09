@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Stage, Layer, Image, Text, Line } from "react-konva";
-import DropdownButton from "@/app/components/dropdown.jsx";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -12,17 +11,33 @@ export default function KonvaCanvas() {
   const [targetElement, setTargetElement] = useState("");
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-  const [isOpen, setIsOpen] = useState(false);
 
-  // Load images when target element changes
+  const getApiUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+
+      return `${protocol}//${hostname}:8080`;
+    }
+
+    return 'http://localhost:8080';
+  };
+
   const fetchImages = async (e) => {
     e.preventDefault();
     setLoading(true);
     setIsLoaded(false);
     setError(null);
 
+    const apiUrl = getApiUrl();
+    console.log('Using API URL:', apiUrl);
+
     try {
-      const res = await fetch("http://localhost:8080/api", {
+      const res = await fetch(`${apiUrl}/api`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40,10 +55,6 @@ export default function KonvaCanvas() {
       const images_data = data.images;
       const line_data = data.lines;
 
-      //console.log("images_data = " + images_data);
-      //console.log("line_data = " + line_data);
-
-      // Load the images
       const loadedImages = await Promise.all(
         images_data.map((imgData) => {
           return new Promise((resolve) => {
@@ -56,7 +67,6 @@ export default function KonvaCanvas() {
               });
             };
             img.onerror = () => {
-              // Still resolve but mark the error
               resolve({
                 ...imgData,
                 loadError: true,
@@ -73,10 +83,6 @@ export default function KonvaCanvas() {
       console.log("Loaded images:", loadedImages);
       console.log("Loaded lines:", line_data);
 
-      line_data.forEach((line, index) => {
-        console.log("Line from_x:", line.from_x, "from_y:", line.from_y, "to_x:", line.to_x, "to_y:", line.to_y);
-      });
-
       setIsLoaded(true);
       setLoading(false);
     } catch (err) {
@@ -87,13 +93,12 @@ export default function KonvaCanvas() {
     }
   };
 
-  // Update stage size on window resize
   useEffect(() => {
     const updateSize = () => {
       if (typeof window !== "undefined") {
         setStageSize({
           width: window.innerWidth,
-          height: window.innerHeight - 60, // Subtract navbar height
+          height: window.innerHeight - 60,
         });
       }
     };
@@ -111,19 +116,21 @@ export default function KonvaCanvas() {
   };
 
   return (
-    
     <div className="relative">
-      {/* {Control panel} */}
-      <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md group">
-      <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-        Method Selection Option
-      </button>
-
-      <div className="absolute mt-2 w-40 bg-white border rounded shadow-lg z-10 hidden group-hover:block">
-        <a href="#" className="block px-4 py-2 hover:bg-gray-100">BFS</a>
-        <a href="#" className="block px-4 py-2 hover:bg-gray-100">DFS</a>
-        <a href="#" className="block px-4 py-2 hover:bg-gray-100">Bidirectional</a>
-      </div>
+      {/* Control panel */}
+      <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
+        <form onSubmit={fetchImages} className="flex gap-2">
+          <input
+            type="text"
+            value={targetElement}
+            onChange={(e) => setTargetElement(e.target.value)}
+            placeholder="Target element"
+            className="border border-gray-300 rounded px-2 py-1 text-sm"
+          />
+          <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm" disabled={loading}>
+            {loading ? "Loading..." : "Fetch"}
+          </button>
+        </form>
       </div>
 
       {/* Konva Stage */}
@@ -147,13 +154,6 @@ export default function KonvaCanvas() {
                 const from_y = stageSize.height / 2 + line.from_y + 30;
                 const to_x = stageSize.width / 2 - 100 + line.to_x + 30;
                 const to_y = stageSize.height / 2 + line.to_y + 30;
-
-                // const stageX = stageRef.current ? stageRef.current.x() : 0;
-                // const stageY = stageRef.current ? stageRef.current.y() : 0;
-
-                // if (!isVisible(imgX, imgY, 60, 60, stagePos.x, stagePos.y, stageSize.width, stageSize.height)) {
-                //   return null;
-                // }
 
                 return <Line key={index} points={[from_x, from_y, to_x, to_y]} stroke="black" strokeWidth={2} />;
               })}
