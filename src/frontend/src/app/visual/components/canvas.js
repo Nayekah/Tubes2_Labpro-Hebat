@@ -108,6 +108,39 @@ export default function KonvaCanvas() {
     return adjustedX + imgWidth > 0 && adjustedX < viewWidth && adjustedY + imgHeight > 0 && adjustedY < viewHeight;
   };
 
+  const isLineVisible = (from_x, from_y, to_x, to_y, stageX, stageY, viewWidth, viewHeight) => {
+    // Calculate viewport boundaries
+    const viewportLeft = -1 * stageX;
+    const viewportTop = -1 * stageY;
+    const viewportRight = viewportLeft + viewWidth;
+    const viewportBottom = viewportTop + viewHeight;
+  
+    // Check if it's a horizontal line
+    if (from_y === to_y) {
+      if (from_y < viewportTop || from_y > viewportBottom) {
+        return false;
+      }
+
+      const leftX = Math.min(from_x, to_x);
+      const rightX = Math.max(from_x, to_x);
+  
+      return rightX >= viewportLeft && leftX <= viewportRight;
+    }
+    
+    if (from_x === to_x) {
+      if (from_x < viewportLeft || from_x > viewportRight) {
+        return false;
+      }
+  
+      const topY = Math.min(from_y, to_y);
+      const bottomY = Math.max(from_y, to_y);
+
+      return bottomY >= viewportTop && topY <= viewportBottom;
+    }
+
+    return false;
+  };
+
   return (
     <div className="relative">
       {/* Control panel */}
@@ -148,8 +181,12 @@ export default function KonvaCanvas() {
                 const to_x = stageSize.width / 2 - 100 + line.to_x + 30;
                 const to_y = stageSize.height / 2 + line.to_y + 30;
 
-                // const stageX = stageRef.current ? stageRef.current.x() : 0;
-                // const stageY = stageRef.current ? stageRef.current.y() : 0;
+                const stageX = stageRef.current ? stageRef.current.x() : 0;
+                const stageY = stageRef.current ? stageRef.current.y() : 0;
+
+                if (!isLineVisible(from_x, from_y, to_x, to_y, stageX, stageY, stageSize.width, stageSize.height)) {
+                  return null;
+                }
 
                 // if (!isVisible(imgX, imgY, 60, 60, stagePos.x, stagePos.y, stageSize.width, stageSize.height)) {
                 //   return null;

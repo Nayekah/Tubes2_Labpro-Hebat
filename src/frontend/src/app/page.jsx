@@ -52,7 +52,7 @@ export default function Home() {
       <Navbar />
 
       {/* Main content with padding to account for fixed header */}
-      <main className="flex-1 container mx-auto px-4 py-6" style={{ paddingTop: `calc(${headerHeight}px + 1.5rem)` }}>
+      <main className="flex-1 container mx-auto px-4 py-6" style={{ paddingTop: `calc(${headerHeight}px + 8rem)` }}>
         <div className="w-full max-w-8xl mx-auto">
           {/* Larger image area with fade effect */}
           <div
