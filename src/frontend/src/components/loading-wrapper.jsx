@@ -1,28 +1,49 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Loading from "@/app/loading"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 export default function LoadingWrapper({ children }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
+  const pathnameRef = useRef("")
   const router = useRouter()
+  const pathname = usePathname()
 
+  // Initial loading when component mounts
   useEffect(() => {
     setIsMounted(true)
-  }, [])
-  
-  useEffect(() => {
-    if (!isMounted) return
-
+    
+    // Set initial pathname
+    pathnameRef.current = pathname
+    
     const timer = setTimeout(() => {
       setIsLoading(false)
     }, 2500)
     
     return () => clearTimeout(timer)
-  }, [isMounted])
+  }, []) // Empty dependency array - only runs once on mount
   
+  // Handle route changes - use useRef to avoid infinite loop
+  useEffect(() => {
+    if (!isMounted) return
+    
+    // Only trigger loading on actual pathname changes
+    if (pathname !== pathnameRef.current) {
+      pathnameRef.current = pathname // Update the ref first
+      
+      setIsLoading(true)
+      
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+      }, 2000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [pathname, isMounted])
+  
+  // Handle browser navigation events 
   useEffect(() => {
     if (!isMounted) return
     
@@ -30,16 +51,12 @@ export default function LoadingWrapper({ children }) {
       setIsLoading(true)
     }
     
-    const handleComplete = () => {
-      setTimeout(() => setIsLoading(false), 300)
-    }
-    
     window.addEventListener('beforeunload', handleStart)
     
     return () => {
       window.removeEventListener('beforeunload', handleStart)
     }
-  }, [router, isMounted])
+  }, [isMounted])
 
   if (!isMounted) {
     return <Loading />

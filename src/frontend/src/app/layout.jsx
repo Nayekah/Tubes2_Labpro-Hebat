@@ -2,6 +2,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { LanguageProvider } from "@/components/language-context"
+import { AudioProvider } from "@/components/audio-context"
 import LoadingWrapper from "@/components/loading-wrapper"
 import localFont from 'next/font/local'
 
@@ -31,9 +32,11 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <LanguageProvider>
-            <LoadingWrapper>
-              {children}
-            </LoadingWrapper>
+            <AudioProvider>
+              <LoadingWrapper>
+                {children}
+              </LoadingWrapper>
+            </AudioProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>

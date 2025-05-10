@@ -12,15 +12,32 @@ export default function KonvaCanvas() {
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
-  // Load images when target element changes
+  const getApiUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+
+      return `${protocol}//${hostname}:8080`;
+    }
+
+    return 'http://localhost:8080';
+  };
+
   const fetchImages = async (e) => {
     e.preventDefault();
     setLoading(true);
     setIsLoaded(false);
     setError(null);
 
+    const apiUrl = getApiUrl();
+    console.log('Using API URL:', apiUrl);
+
     try {
-      const res = await fetch("http://localhost:8080/api", {
+      const res = await fetch(`${apiUrl}/api`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -38,10 +55,6 @@ export default function KonvaCanvas() {
       const images_data = data.images;
       const line_data = data.lines;
 
-      //console.log("images_data = " + images_data);
-      //console.log("line_data = " + line_data);
-
-      // Load the images
       const loadedImages = await Promise.all(
         images_data.map((imgData) => {
           return new Promise((resolve) => {
@@ -54,7 +67,6 @@ export default function KonvaCanvas() {
               });
             };
             img.onerror = () => {
-              // Still resolve but mark the error
               resolve({
                 ...imgData,
                 loadError: true,
@@ -71,10 +83,6 @@ export default function KonvaCanvas() {
       console.log("Loaded images:", loadedImages);
       console.log("Loaded lines:", line_data);
 
-      line_data.forEach((line, index) => {
-        console.log("Line from_x:", line.from_x, "from_y:", line.from_y, "to_x:", line.to_x, "to_y:", line.to_y);
-      });
-
       setIsLoaded(true);
       setLoading(false);
     } catch (err) {
@@ -85,13 +93,12 @@ export default function KonvaCanvas() {
     }
   };
 
-  // Update stage size on window resize
   useEffect(() => {
     const updateSize = () => {
       if (typeof window !== "undefined") {
         setStageSize({
           width: window.innerWidth,
-          height: window.innerHeight - 60, // Subtract navbar height
+          height: window.innerHeight - 60,
         });
       }
     };

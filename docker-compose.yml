@@ -1,6 +1,21 @@
 version: '3.8'
 
 services:
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: LabproHebat-be
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src/backend/data:/app/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
   frontend:
     build:
       context: ./src/frontend
@@ -15,6 +30,8 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    depends_on:
+      - backend
 
 networks:
   app-network:

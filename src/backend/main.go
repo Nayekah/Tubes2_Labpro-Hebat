@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 var INITIALIZED bool = false
@@ -51,9 +54,87 @@ type Response struct {
 	Lines  []LineInfo  `json:"lines"`
 }
 
+type requestData struct {
+	Target string `json:"target"`
+	// nanti tambahin tambahin terserah
+}
+
 var recipes map[string][]pair = make(map[string][]pair)
 var imagesLink map[string]string = make(map[string]string)
 var distances map[string]int = make(map[string]int)
+
+// getImageURL dynamically generates the image URL based on the request host
+func getImageURL(c *gin.Context, imageName string) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+
+	host := c.Request.Host
+
+	return fmt.Sprintf("%s://%s/images/%s_2.svg", scheme, host, imageName)
+}
+
+// runScraperProcess executes the scraper.go file to generate data
+func runScraperProcess() error {
+	fmt.Println("Running scraper to generate data files...")
+
+	// Create data directory if it doesn't exist
+	dataDir := filepath.Dir(RECIPES_PATH)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Get the current directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Look for scraper.go in the usual locations
+	scraperLocs := []string{
+		filepath.Join(currentDir, "scraper.go"),
+		filepath.Join(currentDir, "backend", "scraper.go"),
+		filepath.Join(currentDir, "..", "backend", "scraper.go"),
+		filepath.Join(currentDir, "backend", "scraper", "scraper.go"),
+		filepath.Join(currentDir, "..", "backend", "scraper", "scraper.go"),
+	}
+
+	var scraperPath string
+	for _, loc := range scraperLocs {
+		if _, err := os.Stat(loc); err == nil {
+			scraperPath = loc
+			break
+		}
+	}
+
+	if scraperPath == "" {
+		return fmt.Errorf("scraper.go not found in expected locations")
+	}
+
+	fmt.Printf("Found scraper at: %s\n", scraperPath)
+
+	// Run go run scraper.go
+	cmd := exec.Command("go", "run", scraperPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run scraper: %w", err)
+	}
+
+	// Verify data files were created
+	if _, err := os.Stat(RECIPES_PATH); os.IsNotExist(err) {
+		return fmt.Errorf("scraper did not create recipes file at %s", RECIPES_PATH)
+	}
+
+	if _, err := os.Stat(IMAGES_PATH); os.IsNotExist(err) {
+		return fmt.Errorf("scraper did not create images file at %s", IMAGES_PATH)
+	}
+
+	fmt.Println("Scraper completed successfully")
+	return nil
+}
 
 func readRecipes() {
 	fmt.Println("Reading recipes from", RECIPES_PATH)
@@ -137,7 +218,6 @@ func findAllDistances() {
 
 				if min_distance != 1000000 {
 					distances[key] = min_distance
-					//fmt.Println(key, " : ", distances[key])
 				}
 			}
 		}
@@ -147,6 +227,18 @@ func findAllDistances() {
 func INITIALIZE() {
 	if INITIALIZED == false {
 		INITIALIZED = true
+
+		// Check if data files exist, if not run scraper
+		_, errRecipes := os.Stat(RECIPES_PATH)
+		_, errImages := os.Stat(IMAGES_PATH)
+
+		if os.IsNotExist(errRecipes) || os.IsNotExist(errImages) {
+			fmt.Println("Data files not found, running scraper...")
+
+			if err := runScraperProcess(); err != nil {
+				log.Fatalf("Failed to run scraper: %v", err)
+			}
+		}
 
 		var wg sync.WaitGroup
 		doneFuncA := make(chan struct{})
@@ -173,41 +265,7 @@ func INITIALIZE() {
 	}
 }
 
-type requestData struct {
-	Target string `json:"target"`
-	// nanti tambahin tambahin terserah
-}
-
-func requestHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-	if r.Method == http.MethodOptions {
-		// Handle preflight
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	var data requestData
-	err := json.NewDecoder(r.Body).Decode(&data)
-	fmt.Println("Searching for target:", data.Target)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	images, lines := singleBFS(data.Target)
-
-	response := Response{
-		Images: images,
-		Lines:  lines,
-	}
-	//fmt.Println(response)
-	json.NewEncoder(w).Encode(response)
-}
-
-func singleBFS(target string) ([]ImageInfo, []LineInfo) {
+func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 	///make a 2d vector of string
 	existingTree := make([]*tree, 0)
 
@@ -222,8 +280,6 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 	var countNotPadding int = 0
 	for len(queue) > 0 {
 		node := queue[0]
-
-		//fmt.Println("Depth: ", node.depth, " Count: ", node.depthCount, " Node: ", node.now, " countNotPadding: ", countNotPadding)
 
 		if maxDepth < node.depth {
 			count = 0
@@ -276,39 +332,6 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 		}
 	}
 
-	// output testing
-	// spacing := 10
-	// for i := len(existingTree) - 1; i >= 0; i-- {
-	// 	if existingTree[i].depth == maxDepth {
-	// 		continue
-	// 	}
-
-	// 	j := i
-
-	// 	for existingTree[j].depth == existingTree[i].depth {
-	// 		j--
-	// 		if j < 0 {
-	// 			break
-	// 		}
-	// 	}
-	// 	j = j + 1
-
-	// 	for k := j; k <= i; k++ {
-	// 		if k == j {
-	// 			format := fmt.Sprintf("%%%ds", (spacing+1)/2) // Note: %% to escape %
-	// 			fmt.Printf(format, existingTree[k].now)
-	// 		} else {
-	// 			format := fmt.Sprintf("%%%ds", spacing) // Note: %% to escape %
-	// 			fmt.Printf(format, existingTree[k].now)
-	// 		}
-	// 	}
-
-	// 	fmt.Println("")
-	// 	spacing *= 2
-
-	// 	i = j
-	// }
-
 	spacing := 100
 	images := make([]ImageInfo, 0)
 	//send to json
@@ -328,12 +351,11 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 		j = j + 1
 
 		for k := j; k <= i; k++ {
-			//fmt.Println("Item = ", existingTree[k].now, " Link = ", imagesLink[existingTree[k].now])
 			if k == j {
 				existingTree[k].posX = spacing / 2
 				existingTree[k].posY = (maxDepth-existingTree[k].depth)*100 - 100
 				images = append(images, ImageInfo{
-					Link: "http://localhost:8080/images/" + existingTree[k].now + "_2.svg",
+					Link: getImageURL(c, existingTree[k].now),
 					Row:  (maxDepth-existingTree[k].depth)*100 - 100,
 					Col:  spacing / 2,
 					Name: existingTree[k].now,
@@ -344,7 +366,7 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 				existingTree[k].posY = (maxDepth-existingTree[k].depth)*100 - 100
 
 				images = append(images, ImageInfo{
-					Link: "http://localhost:8080/images/" + existingTree[k].now + "_2.svg",
+					Link: getImageURL(c, existingTree[k].now),
 					Row:  (maxDepth-existingTree[k].depth)*100 - 100,
 					Col:  spacing/2 + spacing*existingTree[k].depthCount,
 					Name: existingTree[k].now,
@@ -377,13 +399,77 @@ func singleBFS(target string) ([]ImageInfo, []LineInfo) {
 	return images, lines
 }
 
+// API handlers
+func handleSearch(c *gin.Context) {
+	var data requestData
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fmt.Println("Searching for target:", data.Target)
+	images, lines := singleBFS(c, data.Target)
+
+	response := Response{
+		Images: images,
+		Lines:  lines,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func handleTest(c *gin.Context) {
+	c.String(http.StatusOK, "Server is working")
+}
+
 func main() {
+	// Initialize data
 	INITIALIZE()
 
-	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("data/images"))))
-	http.HandleFunc("/api", requestHandler)
-	http.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Server is working"))
+	// Set Gin to release mode for production
+	gin.SetMode(gin.ReleaseMode)
+
+	// Create a default Gin router
+	r := gin.Default()
+
+	// Configure CORS middleware
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, Authorization")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
 	})
-	http.ListenAndServe(":8080", nil)
+
+	// Serve static files
+	r.Static("/images", "./data/images")
+
+	// API routes
+	r.POST("/api", handleSearch)
+	r.GET("/test", handleTest)
+
+	// Start the server
+	port := ":8080"
+	fmt.Printf("Server started on port%s\n", port)
+	r.Run(port)
+}
+
+// Helper functions
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

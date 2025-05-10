@@ -13,6 +13,7 @@ import { useLanguage } from "@/components/language-context";
 import { translations } from "@/components/translations";
 import useFade from "@/components/fade-effect";
 import Navbar from "./components/navbar.jsx";
+import Background from "@/components/background";
 
 export default function Home() {
   const headerRef = useRef(null);
@@ -49,16 +50,23 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col relative">
+      <Background />
       <Navbar />
 
       {/* Main content with padding to account for fixed header */}
       <main className="flex-1 container mx-auto px-4 py-6" style={{ paddingTop: `calc(${headerHeight}px + 8rem)` }}>
         <div className="w-full max-w-8xl mx-auto">
-          {/* Larger image area with fade effect */}
+          {/* Larger image area with fade effect - Fixed positioning and height */}
           <div
             ref={heroImage.ref}
-            className={`h-80 md:h-96 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg overflow-hidden relative mb-12 ${heroImage.fadeClasses}`}>
-            <div className="absolute inset-0 bg-[url('/proto.jpg')] bg-cover bg-center opacity-50"></div>
+            className={`h-[350px] md:h-[400px] bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg overflow-hidden relative mb-12 ${heroImage.fadeClasses}`}>
+            <div className="absolute inset-0 bg-[url('/proto.jpg')] bg-cover bg-center opacity-50" 
+                style={{ 
+                  objectFit: "cover",
+                  objectPosition: "center 30%", /* Shift image down to see more of the top */
+                  backgroundPosition: "center 30%" /* Adjust this value to move the background image up or down */
+                }}>
+            </div>
           </div>
 
           {/* Welcome text with fade effect */}
