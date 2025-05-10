@@ -10,7 +10,7 @@ function BurgerMenu() {
     const [isOpen, setIsOpen] = useState(false);
     const [selectedMethod, setSelectedMethod] = useState("BFS");
     const [selectedOption, setSelectedOption] = useState("Shortest");
-    const [customValue, setCustomValue] = useState("");
+    const [customValue, setCustomValue] = useState(1);
 
     const methods = ["BFS", "DFS", "Bidirectional"];
     const options = ["Shortest", "Multiple"];
@@ -41,7 +41,7 @@ function BurgerMenu() {
         </form>
         </div>
         <label>Method:</label>
-        <select className="menu-select">
+        <select disabled={loading} className="menu-select">
           {methods.map((met, idx) => (
             <option key={idx} value={met}>
               {met}
@@ -50,7 +50,7 @@ function BurgerMenu() {
         </select>
 
         <label>Option:</label>
-        <select className="menu-select" onChange={handleSelectChange}>
+        <select disabled={loading} className="menu-select" onChange={handleSelectChange}>
           {options.map((opt, idx) => (
             <option key={idx} value={opt}>
               {opt + " Recipe"}
@@ -63,8 +63,11 @@ function BurgerMenu() {
           <label>
             How many recipes ?
             <Input className = "value-form"
+             disabled = {loading}
               type="number"
               value={customValue}
+              min = "0"
+              max = "100"
               onChange={(e) => setCustomValue(e.target.value)}
             />
           </label>
