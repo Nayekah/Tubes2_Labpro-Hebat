@@ -4,9 +4,11 @@ import './burgermenu.css';
 function BurgerMenu() {
 
     const [isOpen, setIsOpen] = useState(false);
+    const [selectedMethod, setSelectedMethod] = useState("BFS");
     const [selectedOption, setSelectedOption] = useState("Shortest");
     const [customValue, setCustomValue] = useState("");
 
+    const methods = ["BFS", "DFS", "Bidirectional"];
     const options = ["Shortest", "Multiple"];
     const isLastOptionSelected = selectedOption === options[options.length - 1];
 
@@ -21,14 +23,16 @@ function BurgerMenu() {
       <div className={`side-panel ${isOpen ? 'open' : ''}`}>
         <button className="close-btn" onClick={() => setIsOpen(false)}>×</button>
         <div className="search-function">
-        <input type="text" placeholder="Search..." className="menu-input" />
+        <input type="text" placeholder="Search an element..." className="menu-input" />
         <button className ="fetch-btn" onClick={() => ""}>Go</button>
         </div>
         <label>Method:</label>
         <select className="menu-select">
-          <option>BFS</option>
-          <option>DFS</option>
-          <option>Bidirectional</option>
+          {methods.map((met, idx) => (
+            <option key={idx} value={met}>
+              {met}
+            </option>
+          ))}
         </select>
 
         <label>Option:</label>
