@@ -1,8 +1,12 @@
 import React, {useState} from 'react';
+import { Input } from "@/components/ui/input";
+import {Button} from "@/components/ui/button";
+
 import './burgermenu.css';
 
 function BurgerMenu() {
-
+    const [loading, setLoading] = useState(false);
+    const [target, setTargetElement] = useState();
     const [isOpen, setIsOpen] = useState(false);
     const [selectedMethod, setSelectedMethod] = useState("BFS");
     const [selectedOption, setSelectedOption] = useState("Shortest");
@@ -16,15 +20,25 @@ function BurgerMenu() {
     setSelectedOption(e.target.value);
   };
 
+    const fetchImages = () => {
+    }
+
     return (
     <>
-      <button className="burger-icon" onClick={() => setIsOpen(true)}>☰</button>
+      <Button className="bg-white text-black border border-gray-300 rounded-md px-4 py-2 fixed top-30 left-5" 
+      onClick={() => setIsOpen(true)}>☰</Button>
 
       <div className={`side-panel ${isOpen ? 'open' : ''}`}>
-        <button className="close-btn" onClick={() => setIsOpen(false)}>×</button>
+        <Button className="text-[24px] text-black bg-white border-none self-end cursor-pointer hover:bg-gray-200" onClick={() => setIsOpen(false)}>×</Button>
         <div className="search-function">
-        <input type="text" placeholder="Search an element..." className="menu-input" />
-        <button className ="fetch-btn" onClick={() => ""}>Go</button>
+        <form onSubmit={fetchImages} className='flex gap-2'>
+        <Input  type="text" 
+                placeholder="Search an element..." 
+                className="menu-Input" 
+                onChange={(e) => setTargetElement(e.target.value)}
+        />
+        <Button type="submit" disabled={loading} onClick={() => ""}>{loading ? "Loading..." : "Fetch"}</Button>
+        </form>
         </div>
         <label>Method:</label>
         <select className="menu-select">
@@ -48,7 +62,7 @@ function BurgerMenu() {
         <div className="multiple-extra-option">
           <label>
             How many recipes ?
-            <input className = "value-form"
+            <Input className = "value-form"
               type="number"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
