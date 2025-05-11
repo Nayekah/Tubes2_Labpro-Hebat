@@ -9,7 +9,7 @@ export default function KonvaCanvas() {
   const [lines, setLines] = useState([]);
   const [isLoaded, setIsLoaded] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [targetElement, setTargetElement] = useState("");
+  //const [targetElement, setTargetElement] = useState("");
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
@@ -43,7 +43,7 @@ export default function KonvaCanvas() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ Target: targetElement }),
+        body: JSON.stringify({ Target: searchParameter.target}),
       });
 
       if (!res.ok) {
@@ -149,6 +149,21 @@ export default function KonvaCanvas() {
     return false;
   };
 
+  const [searchParameter, setSearchParameter] = useState({
+          target: '',
+          method: 'BFS',
+          option: 'Shortest',
+          numOfRecipes: 0
+      });
+
+  const handleParameterChange = (e) => {
+        const {name, value} = e.target;
+            setSearchParameter((prev) => ({
+            ...prev,
+            [name] : value
+        }));
+    };
+
   return (
     <div className="relative">
       {/* Control panel */}
@@ -167,7 +182,7 @@ export default function KonvaCanvas() {
         </form>
       </div> */}
       <div className="absolute top-24 z-10 bg-white p-1 rounded shadow-md">
-        <BurgerMenu/>
+        <BurgerMenu parameter={searchParameter} onParameterChange={handleParameterChange} isLoading={loading} fetchHandler={fetchImages}/>
       </div>
       {/* Konva Stage */}
       <div className="konva-container">
