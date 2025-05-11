@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
-import { Stage, Layer, Image as KonvaImage, Text, Line, Rect } from "react-konva";
+import { Stage, Layer, Image as KonvaImage, Text, Line, Rect, Group } from "react-konva";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -17,8 +17,11 @@ export default function KonvaCanvas() {
   const insetWidth = 180;
   const insetHeight = 120;
 
+  const [hovered, setHovered] = useState(false);
+
   const CanvasImage = ({ img, x, y }) => {
     const imageRef = useRef();
+
     useEffect(() => {
       const node = imageRef.current;
       const layer = node?.getLayer?.();
@@ -26,7 +29,22 @@ export default function KonvaCanvas() {
         requestAnimationFrame(() => layer.batchDraw());
       }
     }, [img.image]);
-    return <KonvaImage ref={imageRef} image={img.image} x={x} y={y} width={60} height={60} />;
+
+    return (
+      <Group x={x} y={y} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+        {/* Background */}
+        <Rect width={60} height={60} fill="#ddd" cornerRadius={8} />
+
+        {/* Image */}
+        <KonvaImage x={5} y={5} width={50} height={50} ref={imageRef} image={img.image} />
+
+        {/* Border */}
+        <Rect width={60} height={60} stroke="black" strokeWidth={1} cornerRadius={8} />
+
+        {/* Text */}
+        {hovered && <Text text={img.image_name || "???"} fontSize={13} fill="black" x={0} y={-20} width={60} align="center" />}
+      </Group>
+    );
   };
 
   const getApiUrl = () => {
