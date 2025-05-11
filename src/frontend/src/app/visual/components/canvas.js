@@ -167,7 +167,7 @@ export default function KonvaCanvas() {
         </form>
       </div> */}
       <div className="absolute top-24 z-10 bg-white p-1 rounded shadow-md">
-        <BurgerMenu/>
+        <BurgerMenu isLoading={loading} fetchHandler={fetchImages}/>
       </div>
       {/* Konva Stage */}
       <div className="konva-container">

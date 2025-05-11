@@ -4,15 +4,12 @@ import {Button} from "@/components/ui/button";
 
 import './burgermenu.css';
 
-function BurgerMenu() {
-    const [loading, setLoading] = useState(false);
-    const [target, setTargetElement] = useState();
+function BurgerMenu({isLoading, fetchHandler}) {
+    //const [loading, setLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
-    const [selectedMethod, setSelectedMethod] = useState("BFS");
-    const [selectedOption, setSelectedOption] = useState("Shortest");
-    const [customValue, setCustomValue] = useState("");
 
     const [parameter, setParameter] = useState({
+        target: '',
         method: 'BFS',
         option: 'Shortest',
         numOfRecipes: 0
@@ -30,9 +27,6 @@ function BurgerMenu() {
         }));
     };
 
-    const fetchImages = () => {
-    }
-
     return (
     <>
       <Button className="bg-white text-black border border-gray-300 rounded-md px-4 py-2 fixed top-30 left-5" 
@@ -41,13 +35,15 @@ function BurgerMenu() {
       <div className={`side-panel ${isOpen ? 'open' : ''}`}>
         <Button className="text-[24px] text-black bg-white border-none self-end cursor-pointer hover:bg-gray-200" onClick={() => setIsOpen(false)}>×</Button>
         <div className="search-function">
-        <form onSubmit={fetchImages} className='flex gap-2'>
+        <form onSubmit={fetchHandler} className='flex gap-2'>
         <Input  type="text" 
+                name="target"
+                value={parameter.target}
                 placeholder="Search an element..." 
-                className="menu-Input" 
-                onChange={(e) => setTargetElement(e.target.value)}
+                className="menu-input" 
+                onChange={handleChange}
         />
-        <Button type="submit" disabled={loading} onClick={() => ""}>{loading ? "Loading..." : "Fetch"}</Button>
+        <Button type="submit" disabled={isLoading} onClick={() => ""}>{isLoading ? "Loading..." : "Fetch"}</Button>
         </form>
         </div>
 
