@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Stage, Layer, Image, Text, Line } from "react-konva";
+import BurgerMenu from '../../components/burgermenu.jsx'
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -8,7 +9,7 @@ export default function KonvaCanvas() {
   const [lines, setLines] = useState([]);
   const [isLoaded, setIsLoaded] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [targetElement, setTargetElement] = useState("");
+  //const [targetElement, setTargetElement] = useState("");
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
@@ -42,7 +43,7 @@ export default function KonvaCanvas() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ Target: targetElement }),
+        body: JSON.stringify({ Target: searchParameter.target}),
       });
 
       if (!res.ok) {
@@ -148,10 +149,25 @@ export default function KonvaCanvas() {
     return false;
   };
 
+  const [searchParameter, setSearchParameter] = useState({
+          target: '',
+          method: 'BFS',
+          option: 'Shortest',
+          numOfRecipes: 0
+      });
+
+  const handleParameterChange = (e) => {
+        const {name, value} = e.target;
+            setSearchParameter((prev) => ({
+            ...prev,
+            [name] : value
+        }));
+    };
+
   return (
     <div className="relative">
       {/* Control panel */}
-      <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
+      {/* <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
         <form onSubmit={fetchImages} className="flex gap-2">
           <input
             type="text"
@@ -164,8 +180,10 @@ export default function KonvaCanvas() {
             {loading ? "Loading..." : "Fetch"}
           </button>
         </form>
+      </div> */}
+      <div className="absolute top-24 z-10 bg-white p-1 rounded shadow-md">
+        <BurgerMenu parameter={searchParameter} onParameterChange={handleParameterChange} isLoading={loading} fetchHandler={fetchImages}/>
       </div>
-
       {/* Konva Stage */}
       <div className="konva-container">
         <Stage
