@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
 import { Stage, Layer, Image as KonvaImage, Text, Line, Rect, Group } from "react-konva";
+import BurgerMenu from '../../components/burgermenu.jsx'
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -7,7 +8,7 @@ export default function KonvaCanvas() {
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [targetElement, setTargetElement] = useState("");
+  //const [targetElement, setTargetElement] = useState("");
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const imageMapRef = useRef(new Map());
@@ -78,7 +79,7 @@ export default function KonvaCanvas() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ Target: targetElement }),
+        body: JSON.stringify({ Target: searchParameter.target}),
       });
 
       const data = await res.json();
@@ -183,9 +184,65 @@ export default function KonvaCanvas() {
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
+  const isVisible = (imgX, imgY, imgWidth, imgHeight, stageX, stageY, viewWidth, viewHeight) => {
+    const adjustedX = imgX + stageX;
+    const adjustedY = imgY + stageY;
+
+    return adjustedX + imgWidth > 0 && adjustedX < viewWidth && adjustedY + imgHeight > 0 && adjustedY < viewHeight;
+  };
+
+  const isLineVisible = (from_x, from_y, to_x, to_y, stageX, stageY, viewWidth, viewHeight) => {
+    // Calculate viewport boundaries
+    const viewportLeft = -1 * stageX;
+    const viewportTop = -1 * stageY;
+    const viewportRight = viewportLeft + viewWidth;
+    const viewportBottom = viewportTop + viewHeight;
+  
+    // Check if it's a horizontal line
+    if (from_y === to_y) {
+      if (from_y < viewportTop || from_y > viewportBottom) {
+        return false;
+      }
+
+      const leftX = Math.min(from_x, to_x);
+      const rightX = Math.max(from_x, to_x);
+  
+      return rightX >= viewportLeft && leftX <= viewportRight;
+    }
+    
+    if (from_x === to_x) {
+      if (from_x < viewportLeft || from_x > viewportRight) {
+        return false;
+      }
+  
+      const topY = Math.min(from_y, to_y);
+      const bottomY = Math.max(from_y, to_y);
+
+      return bottomY >= viewportTop && topY <= viewportBottom;
+    }
+
+    return false;
+  };
+
+  const [searchParameter, setSearchParameter] = useState({
+          target: '',
+          method: 'BFS',
+          option: 'Shortest',
+          numOfRecipes: 0
+      });
+
+  const handleParameterChange = (e) => {
+        const {name, value} = e.target;
+            setSearchParameter((prev) => ({
+            ...prev,
+            [name] : value
+        }));
+    };
+
   return (
     <div className="relative">
-      <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
+      {/* Control panel */}
+      {/* <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
         <form onSubmit={fetchImages} className="flex gap-2">
           <input
             type="text"
@@ -198,6 +255,9 @@ export default function KonvaCanvas() {
             {loading ? "Loading..." : "Fetch"}
           </button>
         </form>
+      </div> */}
+      <div className="absolute top-24 z-10 bg-white p-1 rounded shadow-md">
+        <BurgerMenu parameter={searchParameter} onParameterChange={handleParameterChange} isLoading={loading} fetchHandler={fetchImages}/>
       </div>
 
       {/* Map */}
