@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
 import { Stage, Layer, Image as KonvaImage, Text, Line, Rect, Group } from "react-konva";
-import BurgerMenu from '../../components/burgermenu.jsx'
+import BurgerMenu from "../../components/burgermenu.jsx";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -43,7 +43,7 @@ export default function KonvaCanvas() {
         <Rect width={60} height={60} stroke="black" strokeWidth={1} cornerRadius={8} />
 
         {/* Text */}
-        {hovered && <Text text={img.image_name || "???"} fontSize={13} fill="black" x={0} y={-20} width={60} align="center" />}
+        {hovered && <Text text={img.image_name || "???"} fontSize={13} fill="black" x={0} y={65} width={60} align="center" />}
       </Group>
     );
   };
@@ -79,13 +79,28 @@ export default function KonvaCanvas() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ Target: searchParameter.target}),
+        body: JSON.stringify({ Target: searchParameter.target }),
       });
 
       const data = await res.json();
       const images_data = data.images;
       const line_data = data.lines;
       setLines(line_data);
+
+      let firstImage = images_data[0];
+      console.log("firstImage:", firstImage);
+      if (firstImage) {
+        const mainStage = stageRef.current;
+        const targetX = -firstImage.image_pos_col;
+        const targetY = -firstImage.image_pos_row + stageSize.height / 2 - 65;
+
+        mainStage.to({
+          x: targetX,
+          y: targetY,
+          duration: 0.3,
+        });
+        setStagePos({ x: targetX, y: targetY });
+      }
 
       const batch = [];
       for (const imgData of images_data) {
@@ -108,6 +123,7 @@ export default function KonvaCanvas() {
         }
         await new Promise((r) => setTimeout(r, 100));
       }
+
       if (batch.length) {
         startTransition(() => {
           setImageIds((prev) => [...prev, ...batch]);
@@ -197,7 +213,7 @@ export default function KonvaCanvas() {
     const viewportTop = -1 * stageY;
     const viewportRight = viewportLeft + viewWidth;
     const viewportBottom = viewportTop + viewHeight;
-  
+
     // Check if it's a horizontal line
     if (from_y === to_y) {
       if (from_y < viewportTop || from_y > viewportBottom) {
@@ -206,15 +222,15 @@ export default function KonvaCanvas() {
 
       const leftX = Math.min(from_x, to_x);
       const rightX = Math.max(from_x, to_x);
-  
+
       return rightX >= viewportLeft && leftX <= viewportRight;
     }
-    
+
     if (from_x === to_x) {
       if (from_x < viewportLeft || from_x > viewportRight) {
         return false;
       }
-  
+
       const topY = Math.min(from_y, to_y);
       const bottomY = Math.max(from_y, to_y);
 
@@ -225,19 +241,19 @@ export default function KonvaCanvas() {
   };
 
   const [searchParameter, setSearchParameter] = useState({
-          target: '',
-          method: 'BFS',
-          option: 'Shortest',
-          numOfRecipes: 0
-      });
+    target: "",
+    method: "BFS",
+    option: "Shortest",
+    numOfRecipes: 0,
+  });
 
   const handleParameterChange = (e) => {
-        const {name, value} = e.target;
-            setSearchParameter((prev) => ({
-            ...prev,
-            [name] : value
-        }));
-    };
+    const { name, value } = e.target;
+    setSearchParameter((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
   return (
     <div className="relative">
@@ -257,7 +273,12 @@ export default function KonvaCanvas() {
         </form>
       </div> */}
       <div className="absolute top-24 z-10 bg-white p-1 rounded shadow-md">
-        <BurgerMenu parameter={searchParameter} onParameterChange={handleParameterChange} isLoading={loading} fetchHandler={fetchImages}/>
+        <BurgerMenu
+          parameter={searchParameter}
+          onParameterChange={handleParameterChange}
+          isLoading={loading}
+          fetchHandler={fetchImages}
+        />
       </div>
 
       {/* Map */}
