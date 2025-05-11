@@ -12,13 +12,23 @@ function BurgerMenu() {
     const [selectedOption, setSelectedOption] = useState("Shortest");
     const [customValue, setCustomValue] = useState("");
 
+    const [parameter, setParameter] = useState({
+        method: 'BFS',
+        option: 'Shortest',
+        numOfRecipes: 0
+    });
+
     const methods = ["BFS", "DFS", "Bidirectional"];
     const options = ["Shortest", "Multiple"];
-    const isLastOptionSelected = selectedOption === options[options.length - 1];
+    const isLastOptionSelected = parameter.option === options[options.length - 1];
 
-    const handleSelectChange = (e) => {
-    setSelectedOption(e.target.value);
-  };
+    const handleChange = (e) => {
+        const {name, value} = e.target;
+            setParameter((prev) => ({
+            ...prev,
+            [name] : value
+        }));
+    };
 
     const fetchImages = () => {
     }
@@ -40,8 +50,9 @@ function BurgerMenu() {
         <Button type="submit" disabled={loading} onClick={() => ""}>{loading ? "Loading..." : "Fetch"}</Button>
         </form>
         </div>
+
         <label>Method:</label>
-        <select className="menu-select">
+        <select name="method" className="menu-select" onChange={handleChange} value={parameter.method}>
           {methods.map((met, idx) => (
             <option key={idx} value={met}>
               {met}
@@ -50,7 +61,7 @@ function BurgerMenu() {
         </select>
 
         <label>Option:</label>
-        <select className="menu-select" onChange={handleSelectChange}>
+        <select name="option" className="menu-select" value={parameter.option} onChange={handleChange}>
           {options.map((opt, idx) => (
             <option key={idx} value={opt}>
               {opt + " Recipe"}
@@ -63,9 +74,10 @@ function BurgerMenu() {
           <label>
             How many recipes ?
             <Input className = "value-form"
+              name="numOfRecipes"
               type="number"
-              value={customValue}
-              onChange={(e) => setCustomValue(e.target.value)}
+              value={parameter.numOfRecipes}
+              onChange={handleChange}
             />
           </label>
         </div>
