@@ -4,28 +4,28 @@ import {Button} from "@/components/ui/button";
 
 import './burgermenu.css';
 
-function BurgerMenu({isLoading, fetchHandler}) {
+function BurgerMenu({isLoading, fetchHandler, parameter, onParameterChange}) {
     //const [loading, setLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
-    const [parameter, setParameter] = useState({
-        target: '',
-        method: 'BFS',
-        option: 'Shortest',
-        numOfRecipes: 0
-    });
+    // const [searchParameter, setSearchParameter] = useState({
+    //     target: '',
+    //     method: 'BFS',
+    //     option: 'Shortest',
+    //     numOfRecipes: 0
+    // });
 
     const methods = ["BFS", "DFS", "Bidirectional"];
     const options = ["Shortest", "Multiple"];
     const isLastOptionSelected = parameter.option === options[options.length - 1];
 
-    const handleChange = (e) => {
-        const {name, value} = e.target;
-            setParameter((prev) => ({
-            ...prev,
-            [name] : value
-        }));
-    };
+    // const handleParameterChange = (e) => {
+    //     const {name, value} = e.target;
+    //         setSearchParameter((prev) => ({
+    //         ...prev,
+    //         [name] : value
+    //     }));
+    // };
 
     return (
     <>
@@ -41,14 +41,14 @@ function BurgerMenu({isLoading, fetchHandler}) {
                 value={parameter.target}
                 placeholder="Search an element..." 
                 className="menu-input" 
-                onChange={handleChange}
+                onChange={onParameterChange}
         />
         <Button type="submit" disabled={isLoading} onClick={() => ""}>{isLoading ? "Loading..." : "Fetch"}</Button>
         </form>
         </div>
 
         <label>Method:</label>
-        <select name="method" className="menu-select" onChange={handleChange} value={parameter.method}>
+        <select name="method" className="menu-select" onChange={onParameterChange} value={parameter.method}>
           {methods.map((met, idx) => (
             <option key={idx} value={met}>
               {met}
@@ -57,7 +57,7 @@ function BurgerMenu({isLoading, fetchHandler}) {
         </select>
 
         <label>Option:</label>
-        <select name="option" className="menu-select" value={parameter.option} onChange={handleChange}>
+        <select name="option" className="menu-select" value={parameter.option} onChange={onParameterChange}>
           {options.map((opt, idx) => (
             <option key={idx} value={opt}>
               {opt + " Recipe"}
@@ -73,7 +73,7 @@ function BurgerMenu({isLoading, fetchHandler}) {
               name="numOfRecipes"
               type="number"
               value={parameter.numOfRecipes}
-              onChange={handleChange}
+              onChange={onParameterChange}
             />
           </label>
         </div>
