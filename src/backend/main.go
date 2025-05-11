@@ -80,7 +80,10 @@ type Response struct {
 }
 
 type requestData struct {
-	Target string `json:"target"`
+	Target       string `json:"target"`
+	Method       string `json:"method"`
+	Option       string `json:"option"`
+	NumOfRecipes string `json:"num_of_recipes"`
 	// nanti tambahin tambahin terserah
 }
 
@@ -508,6 +511,121 @@ func collectTree(n *tree, out *[]*tree) {
 	}
 }
 
+func singleDFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
+	countId := 0
+
+	type SafeTree struct {
+		stack        []*tree
+		existingTree []*tree
+		mu           sync.Mutex
+	}
+
+	Tree := &tree{now: target}
+	safe := &SafeTree{
+		stack:        []*tree{Tree},
+		existingTree: []*tree{},
+	}
+
+	for len(safe.stack) > 0 {
+		var wg sync.WaitGroup
+
+		// Extract up to 4 nodes from the end of the stack
+		safe.mu.Lock()
+		batchSize := min(4, len(safe.stack))
+		batch := make([]*tree, batchSize)
+		copy(batch, safe.stack[len(safe.stack)-batchSize:])
+		safe.stack = safe.stack[:len(safe.stack)-batchSize]
+		safe.mu.Unlock()
+
+		//fmt.Println("Stack size:", len(safe.stack))
+
+		wg.Add(len(batch))
+
+		for _, node := range batch {
+			go func(n *tree) {
+				defer wg.Done()
+
+				safe.mu.Lock()
+				n.id = countId
+				countId++
+				safe.mu.Unlock()
+
+				// DFS step: add children to the stack
+				for _, pair := range recipes[n.now] {
+					if max(distances[pair.First], distances[pair.Second]) < distances[n.now] {
+						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+						right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+						n.children = append(n.children, left, right)
+						n.childCount += 2
+
+						safe.mu.Lock()
+						safe.stack = append(safe.stack, right, left) // Push in reverse order
+						safe.mu.Unlock()
+						break
+					}
+				}
+			}(node)
+		}
+		wg.Wait()
+	}
+
+	getTidyTree(Tree, &safe.existingTree)
+
+	//fmt.Println("Tidy tree generated. Total nodes:", len(safe.existingTree))
+
+	// Generate image info
+	images := make([]ImageInfo, 0)
+	// Generate Line info
+	lines := make([]LineInfo, 0)
+
+	// BFS to generate images
+	stack := make([]*tree, 0)
+	stack = append(stack, Tree)
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		//fmt.Println("Processing node:", node.now, "ID:", node.id)
+
+		images = append(images, ImageInfo{
+			Link: getImageURL(c, strings.ReplaceAll(node.now, " ", "_")),
+			Row:  node.posY,
+			Col:  node.posX,
+			Name: node.now,
+			Id:   node.id,
+		})
+
+		for i := 0; i < node.childCount; i += 2 {
+			left := node.children[i]
+			right := node.children[i+1]
+
+			lines = append(lines, LineInfo{
+				From_x:  left.posX,
+				From_y:  left.posY,
+				From_Id: left.id,
+				To_x:    right.posX,
+				To_y:    right.posY,
+				To_Id:   right.id,
+			})
+
+			lines = append(lines, LineInfo{
+				From_x:  (right.posX + left.posX) / 2,
+				From_y:  right.posY,
+				From_Id: right.id,
+				To_x:    node.posX,
+				To_y:    node.posY,
+				To_Id:   left.id,
+			})
+		}
+
+		for _, child := range node.children {
+			stack = append(stack, child)
+		}
+	}
+
+	return images, lines
+}
+
 func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 	countId := 0
 
@@ -541,14 +659,13 @@ func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 
 				// Track depth
 				safe.mu.Lock()
-				safe.existingTree = append(safe.existingTree, n)
 				n.id = countId
 				countId++
 				safe.mu.Unlock()
 
 				// Handle BFS step and enqueue new nodes
 				for _, pair := range recipes[n.now] {
-					if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] && pair.First != "Time" && pair.Second != "Time" {
+					if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] {
 						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
 						right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
 						n.children = append(n.children, left, right)
@@ -565,10 +682,7 @@ func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 		wg.Wait() // Wait for this batch to finish
 	}
 
-	safe.existingTree = safe.existingTree[:0] // Clear the existing tree for the next step
 	getTidyTree(Tree, &safe.existingTree)
-
-	//fmt.Println("Tidy tree generated. Total nodes:", len(safe.existingTree))
 
 	// Generate image info
 	images := make([]ImageInfo, 0)
@@ -628,8 +742,14 @@ func handleSearch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	fmt.Println(data)
 
 	target := data.Target
+	method := data.Method
+	option := data.Option
+	num_of_recipes := data.NumOfRecipes
+	fmt.Println("Received target:", target, "method:", method, "option:", option, "num_of_recipes:", num_of_recipes)
+
 	runes := []rune(target)
 	for i := 1; i < len(runes); i++ {
 		if 'A' <= runes[i] && runes[i] <= 'Z' {
@@ -642,7 +762,16 @@ func handleSearch(c *gin.Context) {
 	target = string(runes)
 
 	fmt.Println("Searching for target:", target)
-	images, lines := singleBFS(c, target)
+	var images []ImageInfo
+	var lines []LineInfo
+	if method == "DFS" {
+		images, lines = singleDFS(c, target)
+	} else if method == "BFS" {
+		images, lines = singleBFS(c, target)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid method"})
+		return
+	}
 
 	response := Response{
 		Images: images,
