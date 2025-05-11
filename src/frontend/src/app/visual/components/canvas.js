@@ -1,40 +1,58 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Stage, Layer, Image, Text, Line } from "react-konva";
+import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
+import { Stage, Layer, Image as KonvaImage, Text, Line, Rect } from "react-konva";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
+  const insetStageRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
-  const [images, setImages] = useState([]);
   const [lines, setLines] = useState([]);
-  const [isLoaded, setIsLoaded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [targetElement, setTargetElement] = useState("");
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  const imageMapRef = useRef(new Map());
+  const [imageIds, setImageIds] = useState([]);
+  const [isPending, startTransition] = useTransition();
+  const contentBoundsRef = useRef({ minX: -2000, minY: -2000, maxX: 2000, maxY: 2000, width: 4000, height: 4000 });
+  const insetWidth = 180;
+  const insetHeight = 120;
+
+  const CanvasImage = ({ img, x, y }) => {
+    const imageRef = useRef();
+    useEffect(() => {
+      const node = imageRef.current;
+      const layer = node?.getLayer?.();
+      if (layer && typeof layer.batchDraw === "function") {
+        requestAnimationFrame(() => layer.batchDraw());
+      }
+    }, [img.image]);
+    return <KonvaImage ref={imageRef} image={img.image} x={x} y={y} width={60} height={60} />;
+  };
 
   const getApiUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) {
       return process.env.NEXT_PUBLIC_API_URL;
     }
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const protocol = window.location.protocol;
       const hostname = window.location.hostname;
 
       return `${protocol}//${hostname}:8080`;
     }
 
-    return 'http://localhost:8080';
+    return "http://localhost:8080";
   };
 
   const fetchImages = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setIsLoaded(false);
-    setError(null);
+    setLines([]);
+    imageMapRef.current.clear();
+    setImageIds([]);
 
     const apiUrl = getApiUrl();
-    console.log('Using API URL:', apiUrl);
+    console.log("Using API URL:", apiUrl);
 
     try {
       const res = await fetch(`${apiUrl}/api`, {
@@ -45,112 +63,110 @@ export default function KonvaCanvas() {
         body: JSON.stringify({ Target: targetElement }),
       });
 
-      if (!res.ok) {
-        throw new Error(`HTTP error! Status: ${res.status}`);
-      }
-
       const data = await res.json();
-      console.log(data);
-
       const images_data = data.images;
       const line_data = data.lines;
-
-      const loadedImages = await Promise.all(
-        images_data.map((imgData) => {
-          return new Promise((resolve) => {
-            const img = new window.Image();
-            img.src = imgData.image_link;
-            img.onload = () => {
-              resolve({
-                ...imgData,
-                image: img,
-              });
-            };
-            img.onerror = () => {
-              resolve({
-                ...imgData,
-                loadError: true,
-                image: null,
-              });
-            };
-          });
-        })
-      );
-
-      setImages(loadedImages);
       setLines(line_data);
 
-      console.log("Loaded images:", loadedImages);
-      console.log("Loaded lines:", line_data);
-
-      setIsLoaded(true);
-      setLoading(false);
+      const batch = [];
+      for (const imgData of images_data) {
+        const img = new window.Image();
+        img.src = imgData.image_link;
+        await new Promise((resolve) => {
+          img.onload = () => {
+            imageMapRef.current.set(imgData.image_id, { ...imgData, image: img });
+            batch.push(imgData.image_id);
+            resolve();
+          };
+          img.onerror = resolve;
+        });
+        if (batch.length) {
+          const ids = [...batch];
+          batch.length = 0;
+          startTransition(() => {
+            setImageIds((prev) => [...prev, ...ids]);
+          });
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (batch.length) {
+        startTransition(() => {
+          setImageIds((prev) => [...prev, ...batch]);
+        });
+      }
     } catch (err) {
-      setError(err.message || "An error occurred");
-      setIsLoaded(true);
-      setLoading(false);
-      console.error("Error fetching images:", err);
+      setError(err.message);
     }
+    setLoading(false);
+  };
+
+  const visibleImages = useMemo(() => {
+    const visible = [];
+    for (const id of imageIds) {
+      const img = imageMapRef.current.get(id);
+      const x = stageSize.width / 2 - 100 + img.image_pos_col;
+      const y = stageSize.height / 2 + img.image_pos_row;
+      if (
+        x + 60 > -stagePos.x &&
+        x < -stagePos.x + stageSize.width &&
+        y + 60 > -stagePos.y &&
+        y < -stagePos.y + stageSize.height
+      ) {
+        visible.push({ ...img, x, y });
+      }
+    }
+    return visible;
+  }, [imageIds, stagePos, stageSize]);
+
+  const visibleLines = useMemo(() => {
+    const loadedSet = new Set(imageIds);
+    return lines.filter((line) => loadedSet.has(line.from_id) && loadedSet.has(line.to_id));
+  }, [lines, imageIds]);
+
+  const handleInsetClick = (e) => {
+    const insetStage = e.target.getStage();
+    if (!insetStage || !stageRef.current) return;
+
+    const pointerPosition = insetStage.getPointerPosition();
+    if (!pointerPosition) return;
+
+    // Calculate center point in the content coordinates
+    const bounds = contentBoundsRef.current;
+    const scaleX = insetWidth / bounds.width;
+    const scaleY = insetHeight / bounds.height;
+    const scale = Math.min(scaleX, scaleY) * 0.75;
+
+    // Calculate content-relative position
+    const contentX = pointerPosition.x / scale + bounds.minX;
+    const contentY = pointerPosition.y / scale + bounds.minY;
+
+    // Center the main view on this point
+    const mainStage = stageRef.current;
+    const newX = -(contentX - stageSize.width / 2);
+    const newY = -(contentY - stageSize.height / 2);
+
+    // Animate to the new position
+    mainStage.to({
+      x: newX,
+      y: newY,
+      duration: 0.3,
+    });
+
+    // Update state
+    setStagePos({ x: newX, y: newY });
   };
 
   useEffect(() => {
     const updateSize = () => {
-      if (typeof window !== "undefined") {
-        setStageSize({
-          width: window.innerWidth,
-          height: window.innerHeight - 60,
-        });
-      }
+      setStageSize({ width: window.innerWidth, height: window.innerHeight });
     };
-
     updateSize();
     window.addEventListener("resize", updateSize);
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
-  const isVisible = (imgX, imgY, imgWidth, imgHeight, stageX, stageY, viewWidth, viewHeight) => {
-    const adjustedX = imgX + stageX;
-    const adjustedY = imgY + stageY;
-
-    return adjustedX + imgWidth > 0 && adjustedX < viewWidth && adjustedY + imgHeight > 0 && adjustedY < viewHeight;
-  };
-
-  const isLineVisible = (from_x, from_y, to_x, to_y, stageX, stageY, viewWidth, viewHeight) => {
-    // Calculate viewport boundaries
-    const viewportLeft = -1 * stageX;
-    const viewportTop = -1 * stageY;
-    const viewportRight = viewportLeft + viewWidth;
-    const viewportBottom = viewportTop + viewHeight;
-  
-    // Check if it's a horizontal line
-    if (from_y === to_y) {
-      if (from_y < viewportTop || from_y > viewportBottom) {
-        return false;
-      }
-
-      const leftX = Math.min(from_x, to_x);
-      const rightX = Math.max(from_x, to_x);
-  
-      return rightX >= viewportLeft && leftX <= viewportRight;
-    }
-    
-    if (from_x === to_x) {
-      if (from_x < viewportLeft || from_x > viewportRight) {
-        return false;
-      }
-  
-      const topY = Math.min(from_y, to_y);
-      const bottomY = Math.max(from_y, to_y);
-
-      return bottomY >= viewportTop && topY <= viewportBottom;
-    }
-
-    return false;
-  };
-
   return (
     <div className="relative">
-      {/* Control panel */}
       <div className="absolute top-24 left-4 z-10 bg-white p-2 rounded shadow-md">
         <form onSubmit={fetchImages} className="flex gap-2">
           <input
@@ -160,93 +176,88 @@ export default function KonvaCanvas() {
             placeholder="Target element"
             className="border border-gray-300 rounded px-2 py-1 text-sm"
           />
-          <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm" disabled={loading}>
+          <button type="submit" className="bg-blue-500 text-white px-3 py-1 rounded text-sm" disabled={loading}>
             {loading ? "Loading..." : "Fetch"}
           </button>
         </form>
       </div>
 
-      {/* Konva Stage */}
-      <div className="konva-container">
-        <Stage
-          width={stageSize.width}
-          height={stageSize.height}
-          draggable
-          ref={stageRef}
-          onDragMove={(e) => {
-            const stage = e.target;
-            setStagePos({
-              x: stage.x(),
-              y: stage.y(),
-            });
-          }}>
-          <Layer>
-            {isLoaded &&
-              lines.map((line, index) => {
-                const from_x = stageSize.width / 2 - 100 + line.from_x + 30;
-                const from_y = stageSize.height / 2 + line.from_y + 30;
-                const to_x = stageSize.width / 2 - 100 + line.to_x + 30;
-                const to_y = stageSize.height / 2 + line.to_y + 30;
+      {/* Map */}
+      <div className="absolute top-28 right-4 z-10">
+        <div className="bg-white p-1 rounded shadow-md border border-gray-200">
+          <Stage
+            width={insetWidth}
+            height={insetHeight}
+            onClick={handleInsetClick}
+            ref={insetStageRef}
+            style={{ cursor: "pointer" }}>
+            <Layer>
+              <Rect x={0} y={0} width={insetWidth} height={insetHeight} fill="#f0f0f0" />
 
-                const stageX = stageRef.current ? stageRef.current.x() : 0;
-                const stageY = stageRef.current ? stageRef.current.y() : 0;
+              {(() => {
+                const bounds = contentBoundsRef.current;
 
-                if (!isLineVisible(from_x, from_y, to_x, to_y, stageX, stageY, stageSize.width, stageSize.height)) {
-                  return null;
-                }
+                const elements = [];
+                // Calculate position in inset
+                const scaleX = insetWidth / bounds.width;
+                const scaleY = insetHeight / bounds.height;
+                const scale = Math.min(scaleX, scaleY) * 0.75;
 
-                // if (!isVisible(imgX, imgY, 60, 60, stagePos.x, stagePos.y, stageSize.width, stageSize.height)) {
-                //   return null;
-                // }
+                // Draw a simplified representation of the viewport
+                const viewX = (-stagePos.x - bounds.minX) * scale;
+                const viewY = (-stagePos.y - bounds.minY) * scale;
+                const viewWidth = stageSize.width * scale;
+                const viewHeight = stageSize.height * scale;
 
-                return <Line key={index} points={[from_x, from_y, to_x, to_y]} stroke="black" strokeWidth={2} />;
-              })}
-          </Layer>
-
-          <Layer>
-            {error && (
-              <Text
-                text={error}
-                fontSize={20}
-                fill="red"
-                x={stageSize.width / 2 - 150}
-                y={stageSize.height / 2}
-                width={300}
-                align="center"
-              />
-            )}
-
-            {loading && (
-              <Text
-                text="Loading images..."
-                fontSize={20}
-                fill="black"
-                x={stageSize.width / 2 - 100}
-                y={stageSize.height / 2}
-                width={200}
-                align="center"
-              />
-            )}
-
-            {isLoaded &&
-              images.map((img, index) => {
-                const imgX = stageSize.width / 2 - 100 + img.image_pos_col;
-                const imgY = stageSize.height / 2 + img.image_pos_row;
-
-                const stageX = stageRef.current ? stageRef.current.x() : 0;
-                const stageY = stageRef.current ? stageRef.current.y() : 0;
-
-                if (!isVisible(imgX, imgY, 60, 60, stagePos.x, stagePos.y, stageSize.width, stageSize.height)) {
-                  return null;
-                }
-
-                return (
-                  <Image key={img.image_id} alt={img.image_name} image={img.image} x={imgX} y={imgY} width={60} height={60} />
+                elements.push(
+                  <Rect
+                    key="viewport"
+                    x={viewX}
+                    y={viewY}
+                    width={viewWidth}
+                    height={viewHeight}
+                    stroke="red"
+                    strokeWidth={1.5}
+                    fill="red"
+                    opacity={0.2}
+                  />
                 );
-              })}
-          </Layer>
-        </Stage>
+
+                return elements;
+              })()}
+            </Layer>
+          </Stage>
+        </div>
       </div>
+
+      <Stage
+        width={stageSize.width}
+        height={stageSize.height}
+        draggable
+        ref={stageRef}
+        onDragMove={(e) => {
+          const stage = e.target;
+          setStagePos({ x: stage.x(), y: stage.y() });
+        }}>
+        <Layer>
+          {visibleLines.map((line, i) => {
+            const from_x = stageSize.width / 2 - 100 + line.from_x + 30;
+            const from_y = stageSize.height / 2 + line.from_y + 30;
+            const to_x = stageSize.width / 2 - 100 + line.to_x + 30;
+            const to_y = stageSize.height / 2 + line.to_y + 30;
+            return <Line key={i} points={[from_x, from_y, to_x, to_y]} stroke="black" strokeWidth={2} />;
+          })}
+        </Layer>
+
+        <Layer>
+          {error && <Text text={error} fontSize={20} fill="red" x={100} y={100} />}
+          {loading && <Text text="Loading..." fontSize={20} fill="black" x={100} y={130} />}
+
+          {visibleImages.map((img) => (
+            <CanvasImage key={img.image_id} img={img} x={img.x} y={img.y} />
+          ))}
+        </Layer>
+      </Stage>
     </div>
   );
 }

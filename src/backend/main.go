@@ -4,17 +4,19 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 )
 
+// Global variables
 var INITIALIZED bool = false
-
 var RECIPES_PATH string = "data/recipes.csv"
 var IMAGES_PATH string = "data/images.csv"
 
@@ -23,15 +25,36 @@ type pair struct {
 	Second string
 }
 
+const MINSEP_X = 100 // Horizontal spacing
+const MINSEP_Y = 100 // Vertical spacing
+
+type Extreme struct {
+	node  *tree
+	off   int
+	level int
+}
+
+/*	Implementation of Tidy Tree
+* 	Reference : https://reingold.co/tidier-drawings.pdf
+ */
 type tree struct {
-	now           string
-	childrenLeft  *tree
-	childrenRight *tree
-	depth         int
-	depthCount    int
-	leftIndent    int
-	posX          int
-	posY          int
+	id         int
+	now        string
+	children   []*tree
+	childCount int
+	depth      int
+	parent     *tree
+	posX       int
+	posY       int
+
+	// extra fields for layout
+	prelim   int
+	mod      int
+	shift    int
+	change   int
+	thread   *tree
+	ancestor *tree
+	number   int // index among siblings
 }
 
 type ImageInfo struct {
@@ -43,10 +66,12 @@ type ImageInfo struct {
 }
 
 type LineInfo struct {
-	From_x int `json:"from_x"`
-	From_y int `json:"from_y"`
-	To_x   int `json:"to_x"`
-	To_y   int `json:"to_y"`
+	From_x  int `json:"from_x"`
+	From_y  int `json:"from_y"`
+	From_Id int `json:"from_id"`
+	To_x    int `json:"to_x"`
+	To_y    int `json:"to_y"`
+	To_Id   int `json:"to_id"`
 }
 
 type Response struct {
@@ -192,6 +217,9 @@ func readImages() {
 		item := record[0]
 		link := record[1]
 
+		//change space of item to underscore
+		item = strings.ReplaceAll(item, " ", "_")
+
 		imagesLink[item] = link
 	}
 }
@@ -265,134 +293,328 @@ func INITIALIZE() {
 	}
 }
 
+func getTidyTree(root *tree, existingTree *[]*tree) {
+	assignDepth(root, 0)
+	assignNumbers(root)
+	firstWalk(root)
+	secondWalk(root, 0)
+	normalizeCoordinates(root)
+	collectTree(root, existingTree)
+}
+
+func assignDepth(n *tree, d int) {
+	n.depth = d
+	for _, c := range n.children {
+		assignDepth(c, d+1)
+	}
+}
+
+func assignNumbers(n *tree) {
+	for i, c := range n.children {
+		c.number = i
+		assignNumbers(c)
+	}
+}
+
+func firstWalk(v *tree) {
+	if v.childCount == 0 {
+		left := leftSibling(v)
+		if left != nil {
+			v.prelim = left.prelim + MINSEP_X
+		} else {
+			v.prelim = 0
+		}
+	} else {
+		defaultAncestor := v.children[0]
+		for _, w := range v.children {
+			firstWalk(w)
+			apportion(w, &defaultAncestor)
+		}
+		executeShifts(v)
+		leftmost := v.children[0]
+		rightmost := v.children[v.childCount-1]
+		mid := (leftmost.prelim + rightmost.prelim) / 2
+		left := leftSibling(v)
+		if left != nil {
+			v.prelim = left.prelim + MINSEP_X
+			v.mod = v.prelim - mid
+		} else {
+			v.prelim = mid
+		}
+	}
+}
+
+func secondWalk(v *tree, m int) {
+	v.posX = v.prelim + m
+	v.posY = -1 * v.depth * MINSEP_Y
+	for _, c := range v.children {
+		secondWalk(c, m+v.mod)
+	}
+}
+
+func apportion(v *tree, defaultAncestor **tree) {
+	w := leftSibling(v)
+	if w == nil {
+		return
+	}
+	vip, vop := v, v
+	vim, vom := w, leftmostSibling(v)
+	sip, sop := vip.mod, vop.mod
+	sim, som := vim.mod, vom.mod
+
+	for nextRight(vim) != nil && nextLeft(vip) != nil {
+		vim = nextRight(vim)
+		vip = nextLeft(vip)
+		vom = nextLeft(vom)
+		vop = nextRight(vop)
+		vop.ancestor = v
+		shift := (vim.prelim + sim) - (vip.prelim + sip) + MINSEP_X
+		if shift > 0 {
+			ancestor := getAncestor(vim, v)
+			if ancestor == nil {
+				ancestor = *defaultAncestor
+			}
+			moveSubtree(ancestor, v, shift)
+			sip += shift
+			sop += shift
+		}
+		sim += vim.mod
+		sip += vip.mod
+		som += vom.mod
+		sop += vop.mod
+	}
+
+	if nextRight(vim) != nil && nextRight(vop) == nil {
+		vop.thread = nextRight(vim)
+		vop.mod += sim - sop
+	}
+	if nextLeft(vip) != nil && nextLeft(vom) == nil {
+		vom.thread = nextLeft(vip)
+		vom.mod += sip - som
+		*defaultAncestor = v
+	}
+}
+
+func moveSubtree(wm, wp *tree, shift int) {
+	subtrees := wp.number - wm.number
+	if subtrees == 0 {
+		return
+	}
+	shiftPerSubtree := float64(shift) / float64(subtrees)
+	wp.change -= int(math.Round(shiftPerSubtree))
+	wp.shift += shift
+	wm.change += int(math.Round(shiftPerSubtree))
+	wp.prelim += shift
+	wp.mod += shift
+}
+
+func executeShifts(v *tree) {
+	shift := 0
+	change := 0
+	for i := v.childCount - 1; i >= 0; i-- {
+		w := v.children[i]
+		w.prelim += shift
+		w.mod += shift
+		change += w.change
+		shift += w.shift + change
+	}
+}
+
+func getAncestor(vi, v *tree) *tree {
+	if vi.parent == nil || vi.parent != v.parent {
+		return nil
+	}
+	return vi.ancestor
+}
+
+func leftSibling(n *tree) *tree {
+	if n.parent == nil {
+		return nil
+	}
+	idx := -1
+	for i, c := range n.parent.children {
+		if c == n {
+			idx = i
+			break
+		}
+	}
+	if idx > 0 {
+		return n.parent.children[idx-1]
+	}
+	return nil
+}
+
+func leftmostSibling(n *tree) *tree {
+	if n.parent == nil || len(n.parent.children) == 0 {
+		return nil
+	}
+	return n.parent.children[0]
+}
+
+func nextLeft(n *tree) *tree {
+	if n.childCount == 0 {
+		return n.thread
+	}
+	return n.children[0]
+}
+
+func nextRight(n *tree) *tree {
+	if n.childCount == 0 {
+		return n.thread
+	}
+	return n.children[n.childCount-1]
+}
+
+func normalizeCoordinates(root *tree) {
+	xmin := findMinX(root)
+	ymin := findMinY(root)
+	adjust(root, xmin, ymin)
+}
+
+func findMinX(n *tree) int {
+	min := n.posX
+	for _, c := range n.children {
+		cx := findMinX(c)
+		if cx < min {
+			min = cx
+		}
+	}
+	return min
+}
+
+func findMinY(n *tree) int {
+	min := n.posY
+	for _, c := range n.children {
+		cy := findMinY(c)
+		if cy < min {
+			min = cy
+		}
+	}
+	return min
+}
+
+func adjust(n *tree, dx, dy int) {
+	n.posX -= dx
+	n.posY -= dy
+	for _, c := range n.children {
+		adjust(c, dx, dy)
+	}
+}
+
+func collectTree(n *tree, out *[]*tree) {
+	*out = append(*out, n)
+	for _, c := range n.children {
+		collectTree(c, out)
+	}
+}
+
 func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
-	///make a 2d vector of string
-	existingTree := make([]*tree, 0)
+	countId := 0
 
-	Tree := &tree{now: target, childrenLeft: nil, childrenRight: nil}
+	type SafeTree struct {
+		queue        []*tree
+		existingTree []*tree
+		mu           sync.Mutex
+	}
 
-	maxDepth := 0
-	count := 0
+	Tree := &tree{now: target}
+	safe := &SafeTree{
+		queue:        []*tree{Tree},
+		existingTree: []*tree{},
+	}
 
+	for len(safe.queue) > 0 {
+		var wg sync.WaitGroup
+
+		// Extract up to 4 nodes from the queue
+		safe.mu.Lock()
+		batchSize := min(4, len(safe.queue))
+		batch := safe.queue[:batchSize]
+		safe.queue = safe.queue[batchSize:]
+		safe.mu.Unlock()
+
+		wg.Add(len(batch))
+
+		for _, node := range batch {
+			go func(n *tree) {
+				defer wg.Done()
+
+				// Track depth
+				safe.mu.Lock()
+				safe.existingTree = append(safe.existingTree, n)
+				n.id = countId
+				countId++
+				safe.mu.Unlock()
+
+				// Handle BFS step and enqueue new nodes
+				for _, pair := range recipes[n.now] {
+					if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] && pair.First != "Time" && pair.Second != "Time" {
+						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+						right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+						n.children = append(n.children, left, right)
+						n.childCount += 2
+
+						safe.mu.Lock()
+						safe.queue = append(safe.queue, left, right)
+						safe.mu.Unlock()
+						break
+					}
+				}
+			}(node)
+		}
+		wg.Wait() // Wait for this batch to finish
+	}
+
+	safe.existingTree = safe.existingTree[:0] // Clear the existing tree for the next step
+	getTidyTree(Tree, &safe.existingTree)
+
+	//fmt.Println("Tidy tree generated. Total nodes:", len(safe.existingTree))
+
+	// Generate image info
+	images := make([]ImageInfo, 0)
+	// Generate Line info
+	lines := make([]LineInfo, 0)
+
+	// BFS to generate images
 	queue := make([]*tree, 0)
 	queue = append(queue, Tree)
-
-	var countNotPadding int = 0
 	for len(queue) > 0 {
 		node := queue[0]
-
-		if maxDepth < node.depth {
-			count = 0
-			if countNotPadding == 0 {
-				break
-			}
-
-			maxDepth = node.depth
-			countNotPadding = 0
-		}
-
-		if node.now != "padding" {
-			countNotPadding = countNotPadding + 1
-		}
-
-		node.depthCount = count
-		count++
-
-		existingTree = append(existingTree, node)
-
 		queue = queue[1:]
 
-		uncraftable := true
-		if node.now != "padding" {
-			for _, pair := range recipes[node.now] {
-				if (max(distances[pair.First], distances[pair.Second]) + 1) == distances[node.now] {
-					node.childrenLeft = &tree{now: pair.First, childrenLeft: nil, childrenRight: nil}
-					node.childrenRight = &tree{now: pair.Second, childrenLeft: nil, childrenRight: nil}
-					node.childrenLeft.depth = node.depth + 1
-					node.childrenRight.depth = node.depth + 1
+		images = append(images, ImageInfo{
+			Link: getImageURL(c, strings.ReplaceAll(node.now, " ", "_")),
+			Row:  node.posY,
+			Col:  node.posX,
+			Name: node.now,
+			Id:   node.id,
+		})
 
-					queue = append(queue, node.childrenLeft, node.childrenRight)
-					uncraftable = false
+		for i := 0; i < node.childCount; i += 2 {
+			left := node.children[i]
+			right := node.children[i+1]
 
-					break
-				}
-			}
-		}
-
-		if uncraftable {
-			tree1 := &tree{now: "padding", childrenLeft: nil, childrenRight: nil}
-			tree1.depth = node.depth + 1
-			node.childrenLeft = tree1
-
-			tree2 := &tree{now: "padding", childrenLeft: nil, childrenRight: nil}
-			tree2.depth = node.depth + 1
-			node.childrenRight = tree2
-
-			queue = append(queue, node.childrenLeft, node.childrenRight)
-		}
-	}
-
-	spacing := 100
-	images := make([]ImageInfo, 0)
-	//send to json
-	for i := len(existingTree) - 1; i >= 0; i-- {
-		if existingTree[i].depth == maxDepth {
-			continue
-		}
-
-		j := i
-
-		for existingTree[j].depth == existingTree[i].depth {
-			j--
-			if j < 0 {
-				break
-			}
-		}
-		j = j + 1
-
-		for k := j; k <= i; k++ {
-			if k == j {
-				existingTree[k].posX = spacing / 2
-				existingTree[k].posY = (maxDepth-existingTree[k].depth)*100 - 100
-				images = append(images, ImageInfo{
-					Link: getImageURL(c, existingTree[k].now),
-					Row:  (maxDepth-existingTree[k].depth)*100 - 100,
-					Col:  spacing / 2,
-					Name: existingTree[k].now,
-					Id:   k,
-				})
-			} else {
-				existingTree[k].posX = spacing/2 + spacing*existingTree[k].depthCount
-				existingTree[k].posY = (maxDepth-existingTree[k].depth)*100 - 100
-
-				images = append(images, ImageInfo{
-					Link: getImageURL(c, existingTree[k].now),
-					Row:  (maxDepth-existingTree[k].depth)*100 - 100,
-					Col:  spacing/2 + spacing*existingTree[k].depthCount,
-					Name: existingTree[k].now,
-					Id:   k})
-			}
-		}
-		spacing *= 2
-		i = j
-	}
-
-	lines := make([]LineInfo, 0)
-	for i := 0; i < len(existingTree); i++ {
-		if existingTree[i].now != "padding" && existingTree[i].childrenLeft.now != "padding" && existingTree[i].childrenRight.now != "padding" {
 			lines = append(lines, LineInfo{
-				To_x:   existingTree[i].posX,
-				To_y:   existingTree[i].posY,
-				From_x: (existingTree[i].childrenLeft.posX + existingTree[i].childrenRight.posX) / 2,
-				From_y: existingTree[i].childrenLeft.posY,
+				From_x:  left.posX,
+				From_y:  left.posY,
+				From_Id: left.id,
+				To_x:    right.posX,
+				To_y:    right.posY,
+				To_Id:   right.id,
 			})
 
 			lines = append(lines, LineInfo{
-				To_x:   existingTree[i].childrenLeft.posX,
-				To_y:   existingTree[i].childrenLeft.posY,
-				From_x: existingTree[i].childrenRight.posX,
-				From_y: existingTree[i].childrenRight.posY,
+				From_x:  (right.posX + left.posX) / 2,
+				From_y:  right.posY,
+				From_Id: right.id,
+				To_x:    node.posX,
+				To_y:    node.posY,
+				To_Id:   left.id,
 			})
+		}
+
+		for _, child := range node.children {
+			queue = append(queue, child)
 		}
 	}
 
@@ -407,8 +629,20 @@ func handleSearch(c *gin.Context) {
 		return
 	}
 
-	fmt.Println("Searching for target:", data.Target)
-	images, lines := singleBFS(c, data.Target)
+	target := data.Target
+	runes := []rune(target)
+	for i := 1; i < len(runes); i++ {
+		if 'A' <= runes[i] && runes[i] <= 'Z' {
+			runes[i] = runes[i] + 32
+		}
+	}
+	if runes[0] >= 'a' && runes[0] <= 'z' {
+		runes[0] = runes[0] - 32
+	}
+	target = string(runes)
+
+	fmt.Println("Searching for target:", target)
+	images, lines := singleBFS(c, target)
 
 	response := Response{
 		Images: images,
