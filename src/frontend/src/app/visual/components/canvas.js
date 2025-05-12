@@ -462,8 +462,8 @@ export default function KonvaCanvas({ onTerminalMessage }) {
       </div>
 
       <Stage
-        width={stageSize.width / zoomScale}
-        height={stageSize.height / zoomScale}
+        width={stageSize.width}
+        height={stageSize.height}
         draggable
         onWheel={handleWheel}
         ref={stageRef}
