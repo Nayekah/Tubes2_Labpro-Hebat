@@ -757,7 +757,7 @@ func multiDFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 
 				// DFS step: add children to the stack
 				for _, pair := range recipes[n.now] {
-					if atomic.LoadInt32(&counter) < int32(count) {
+					if atomic.LoadInt32(&counter) < int32(count) - 1 {
 						atomic.AddInt32(&counter, 1)
 
 						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
@@ -1011,7 +1011,7 @@ func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 
 				// Handle BFS step and enqueue new nodes
 				for _, pair := range recipes[n.now] {
-					if atomic.LoadInt32(&counter) < int32(count) {
+					if atomic.LoadInt32(&counter) < int32(count) - 1 {
 						atomic.AddInt32(&counter, 1)
 
 						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}

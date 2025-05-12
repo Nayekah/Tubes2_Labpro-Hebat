@@ -418,7 +418,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
       </div>
 
       {/* Map */}
-      <div className="absolute top-40 right-8 z-10">
+      <div className="absolute top-32 right-8 z-10">
         <div className="bg-white dark:bg-gray-800 p-1 rounded shadow-md border border-gray-500 dark:border-gray-600">
           <Stage
             width={insetWidth}
