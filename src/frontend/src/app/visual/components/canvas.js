@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
 import { Stage, Layer, Image as KonvaImage, Text, Line, Rect, Group } from "react-konva";
 import BurgerMenu from "../../components/burgermenu.jsx";
+import SearchRecipe from "@/app/components/search.jsx";
 
 export default function KonvaCanvas() {
   const stageRef = useRef(null);
@@ -286,6 +287,7 @@ export default function KonvaCanvas() {
           isLoading={loading}
           fetchHandler={fetchImages}
         />
+        <SearchRecipe/>
       </div>
 
       {/* Map */}

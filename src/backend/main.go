@@ -4,15 +4,14 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"sort"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,6 +28,11 @@ type pair struct {
 
 const MINSEP_X = 100 // Horizontal spacing
 const MINSEP_Y = 100 // Vertical spacing
+const NODE_HEIGHT = 60
+const LEVEL_SEP = 100
+const NODE_WIDTH = 60
+const SIBLING_SEP = 40
+const SUBTREE_SEP = 10
 
 type Extreme struct {
 	node  *tree
@@ -41,22 +45,35 @@ type Extreme struct {
  */
 type tree struct {
 	id         int
-	now        string
-	children   []*tree
-	childCount int
-	depth      int
-	parent     *tree
-	posX       int
-	posY       int
+	now        string  // Node name or value
+	parent     *tree   // Parent node
+	children   []*tree // Child nodes
+	childCount int     // Number of children
 
-	// extra fields for layout
-	prelim   int
-	mod      int
-	shift    int
-	change   int
-	thread   *tree
-	ancestor *tree
-	number   int // index among siblings
+	// Layout properties
+	depth    int   // Depth in the tree
+	number   int   // Number among siblings
+	prelim   int   // Preliminary x-coordinate
+	mod      int   // Modifier for children
+	shift    int   // Shift applied to subtree
+	change   int   // Change in shift
+	posX     int   // Final x position
+	posY     int   // Final y position
+	thread   *tree // Thread to next node in contour
+	ancestor *tree // For ancestor optimization
+}
+
+type ContourNode struct {
+	level int
+	posX  int
+	next  *ContourNode
+}
+
+// TreeExtents represents the horizontal extent of a subtree
+type TreeExtents struct {
+	left  *ContourNode // Left contour
+	right *ContourNode // Right contour
+	width int          // Width of the subtree
 }
 
 type ImageInfo struct {
@@ -298,316 +315,276 @@ func INITIALIZE() {
 	}
 }
 
+var maxDepth int
+
 func getTidyTree(root *tree, existingTree *[]*tree) {
-	assignDepth(root, 0)
-	assignNumbers(root)
-	firstWalk(root)
-	secondWalk(root, 0)
+	if root == nil {
+		return
+	}
+
+	// Initialize depths and other properties
+	assignDepths(root, 0)
+
+	// Calculate the initial positions
+	calculateInitialPositions(root, 0)
+
+	// Ensure no subtrees overlap
+	resolveOverlaps(root)
+
+	// Center parent nodes over their children
+	centerParents(root)
+
+	// Normalize coordinates to ensure all are positive
 	normalizeCoordinates(root)
-	
-	treeLevel := make(map[int][]*tree)
-	collectTreeLevel(root, &treeLevel)
-	postProcess(&treeLevel)
-	
+
+	// Collect all tree nodes into the provided slice
+	*existingTree = make([]*tree, 0)
 	collectTree(root, existingTree)
 }
 
-func collectTreeLevel(n *tree, treeLevel *map[int][]*tree) {
-	if _, ok := (*treeLevel)[n.depth]; !ok {
-		(*treeLevel)[n.depth] = make([]*tree, 0)
-	}
-	(*treeLevel)[n.depth] = append((*treeLevel)[n.depth], n)
-
-	for _, c := range n.children {
-		collectTreeLevel(c, treeLevel)
+// assignDepths assigns depth values to each node in the tree
+func assignDepths(node *tree, depth int) {
+	node.depth = depth
+	for _, child := range node.children {
+		assignDepths(child, depth+1)
 	}
 }
 
-func postProcess(treeLevel *map[int][]*tree) {
+// calculateInitialPositions calculates x-coordinates based on the enhanced algorithm
+func calculateInitialPositions(node *tree, offset int) int {
+	if len(node.children) == 0 {
+		// Leaf node
+		node.posX = offset
+		node.posY = node.depth * LEVEL_SEP
+		return node.posX + NODE_WIDTH
+	}
+
+	// Initialize the position for the first child
+	childOffset := offset
+
+	// Position all children first
+	for _, child := range node.children {
+		childOffset = calculateInitialPositions(child, childOffset)
+		if child != node.children[len(node.children)-1] {
+			childOffset += SIBLING_SEP // Add separation between siblings
+		}
+	}
+
+	// Calculate parent's position (centered over children)
+	firstChild := node.children[0]
+	lastChild := node.children[len(node.children)-1]
+
+	// Position the parent centered over its children
+	node.posX = (firstChild.posX + lastChild.posX) / 2
+	node.posY = node.depth * LEVEL_SEP
+
+	return childOffset
+}
+
+// resolveOverlaps ensures no subtrees overlap by shifting them if necessary
+func resolveOverlaps(root *tree) {
+	// Create a map to store nodes by level
+	levelMap := make(map[int][]*tree)
+	collectNodesByLevel(root, levelMap)
+
+	// Process levels from bottom to top
 	maxDepth := 0
-	for key := range *treeLevel {
-		if key > maxDepth {
-			maxDepth = key
+	for depth := range levelMap {
+		if depth > maxDepth {
+			maxDepth = depth
 		}
 	}
 
-	// sort each level based on their PosX
-	for level := 0; level <= maxDepth; level++ {
-		nodes := (*treeLevel)[level]
-		sort.Slice(nodes, func(i, j int) bool {
-			return nodes[i].posX < nodes[j].posX
+	// Process each level starting from the bottom
+	for depth := maxDepth; depth >= 0; depth-- {
+		nodesAtLevel := levelMap[depth]
+
+		// Sort nodes at this level by x-coordinate
+		sort.Slice(nodesAtLevel, func(i, j int) bool {
+			return nodesAtLevel[i].posX < nodesAtLevel[j].posX
 		})
-		(*treeLevel)[level] = nodes
-	}
 
-	levelNodes := (*treeLevel)[maxDepth]
-	for i, node := range levelNodes {
-		if i == 0 {
-			continue
-		} else {
-			if levelNodes[i-1].posX+MINSEP_X > node.posX {
-				levelNodes[i].posX = levelNodes[i-1].posX + MINSEP_X
+		// Check and fix overlaps between adjacent subtrees
+		for i := 1; i < len(nodesAtLevel); i++ {
+			leftNode := nodesAtLevel[i-1]
+			rightNode := nodesAtLevel[i]
+
+			// Calculate subtree widths
+			leftExtent := getSubtreeRightExtent(leftNode)
+			rightExtent := getSubtreeLeftExtent(rightNode)
+
+			// Calculate current gap between subtrees
+			gap := rightExtent - leftExtent
+
+			// If gap is less than minimum required, shift the right subtree
+			if gap < SUBTREE_SEP {
+				shift := SUBTREE_SEP - gap
+				shiftSubtree(rightNode, shift)
 			}
 		}
-	}
 
-	for i := maxDepth - 1; i >= 0; i-- {
-		// Additional processing if needed
-		for _, node := range (*treeLevel)[i] {
-			minLeft := 1000000
-			maxRight := -1000000
-
-			if node.childCount == 0 {
-				continue
-			}
-
-			for _, child := range node.children {
-				if child.posX < minLeft {
-					minLeft = child.posX
-				}
-				if child.posX > maxRight {
-					maxRight = child.posX
-				}
-			}
-
-			node.posX = (minLeft + maxRight) / 2
-		}
-
-		for j, node := range (*treeLevel)[i] {
-			if j == 0 {
-				continue
-			} else {
-				if (*treeLevel)[i][j-1].posX+MINSEP_X > node.posX {
-					(*treeLevel)[i][j].posX = (*treeLevel)[i][j-1].posX + MINSEP_X
-				}
+		// After fixing overlaps at this level, ensure parents are centered
+		for _, node := range nodesAtLevel {
+			if len(node.children) > 0 {
+				// Recenter parent over its children after potential shifting
+				centerNodeOverChildren(node)
 			}
 		}
 	}
 }
 
-func assignDepth(n *tree, d int) {
-	n.depth = d
-	for _, c := range n.children {
-		assignDepth(c, d+1)
+// getSubtreeLeftExtent returns the leftmost x-coordinate in a subtree
+func getSubtreeLeftExtent(node *tree) int {
+	if len(node.children) == 0 {
+		return node.posX
 	}
-}
 
-func assignNumbers(n *tree) {
-	for i, c := range n.children {
-		c.number = i
-		assignNumbers(c)
-	}
-}
-
-func firstWalk(v *tree) {
-	if v.childCount == 0 {
-		left := leftSibling(v)
-		if left != nil {
-			v.prelim = left.prelim + MINSEP_X
-		} else {
-			v.prelim = 0
-		}
-	} else {
-		defaultAncestor := v.children[0]
-		for _, w := range v.children {
-			firstWalk(w)
-			apportion(w, &defaultAncestor)
-		}
-		enforceMinimumSpacing(v.children)
-		executeShifts(v)
-		leftmost := v.children[0]
-		rightmost := v.children[v.childCount-1]
-		mid := (leftmost.prelim + rightmost.prelim) / 2
-		left := leftSibling(v)
-		if left != nil {
-			v.prelim = left.prelim + MINSEP_X
-			v.mod = v.prelim - mid
-		} else {
-			v.prelim = mid
+	leftmost := node.posX
+	for _, child := range node.children {
+		childLeft := getSubtreeLeftExtent(child)
+		if childLeft < leftmost {
+			leftmost = childLeft
 		}
 	}
+	return leftmost
 }
 
-func enforceMinimumSpacing(children []*tree) {
-	for i := 1; i < len(children); i++ {
-		left := children[i-1]
-		right := children[i]
-		gap := right.prelim - left.prelim
-		if gap < MINSEP_X {
-			delta := MINSEP_X - gap
-			shiftSubtree(right, delta)
+// getSubtreeRightExtent returns the rightmost x-coordinate in a subtree
+func getSubtreeRightExtent(node *tree) int {
+	if len(node.children) == 0 {
+		return node.posX + NODE_WIDTH
+	}
+
+	rightmost := node.posX + NODE_WIDTH
+	for _, child := range node.children {
+		childRight := getSubtreeRightExtent(child)
+		if childRight > rightmost {
+			rightmost = childRight
+		}
+	}
+	return rightmost
+}
+
+// shiftSubtree moves a subtree by shifting all nodes horizontally
+func shiftSubtree(node *tree, shift int) {
+	node.posX += shift
+	for _, child := range node.children {
+		shiftSubtree(child, shift)
+	}
+}
+
+// collectNodesByLevel collects nodes into a map keyed by depth
+func collectNodesByLevel(node *tree, levelMap map[int][]*tree) {
+	if _, exists := levelMap[node.depth]; !exists {
+		levelMap[node.depth] = make([]*tree, 0)
+	}
+	levelMap[node.depth] = append(levelMap[node.depth], node)
+
+	for _, child := range node.children {
+		collectNodesByLevel(child, levelMap)
+	}
+}
+
+// centerParents ensures all parents are properly centered over their children
+func centerParents(node *tree) {
+	if len(node.children) > 0 {
+		centerNodeOverChildren(node)
+
+		// Process all children recursively
+		for _, child := range node.children {
+			centerParents(child)
 		}
 	}
 }
 
-func shiftSubtree(n *tree, delta int) {
-	n.prelim += delta
-	for _, c := range n.children {
-		shiftSubtree(c, delta)
-	}
-}
-
-func secondWalk(v *tree, m int) {
-	v.posX = v.prelim + m
-	v.posY = -1 * v.depth * MINSEP_Y
-	for _, c := range v.children {
-		secondWalk(c, m+v.mod)
-	}
-}
-
-func apportion(v *tree, defaultAncestor **tree) {
-	w := leftSibling(v)
-	if w == nil {
+// centerNodeOverChildren centers a node over its children
+func centerNodeOverChildren(node *tree) {
+	if len(node.children) == 0 {
 		return
 	}
-	vip, vop := v, v
-	vim, vom := w, leftmostSibling(v)
-	sip, sop := vip.mod, vop.mod
-	sim, som := vim.mod, vom.mod
 
-	for nextRight(vim) != nil && nextLeft(vip) != nil {
-		vim = nextRight(vim)
-		vip = nextLeft(vip)
-		vom = nextLeft(vom)
-		vop = nextRight(vop)
-		vop.ancestor = v
-		shift := (vim.prelim + sim) - (vip.prelim + sip) + MINSEP_X
-		if shift > 0 {
-			ancestor := getAncestor(vim, v)
-			if ancestor == nil {
-				ancestor = *defaultAncestor
-			}
-			moveSubtree(ancestor, v, shift)
-			sip += shift
-			sop += shift
-		}
-		sim += vim.mod
-		sip += vip.mod
-		som += vom.mod
-		sop += vop.mod
-	}
+	// Find leftmost and rightmost child positions
+	leftmostX := node.children[0].posX
+	rightmostX := node.children[len(node.children)-1].posX
 
-	if nextRight(vim) != nil && nextRight(vop) == nil {
-		vop.thread = nextRight(vim)
-		vop.mod += sim - sop
-	}
-	if nextLeft(vip) != nil && nextLeft(vom) == nil {
-		vom.thread = nextLeft(vip)
-		vom.mod += sip - som
-		*defaultAncestor = v
+	// Center parent over the midpoint of extreme children
+	newX := (leftmostX + rightmostX) / 2
+
+	// Only adjust if position has changed
+	if newX != node.posX {
+		node.posX = newX
 	}
 }
 
-func moveSubtree(wm, wp *tree, shift int) {
-	subtrees := wp.number - wm.number
-	if subtrees == 0 {
-		return
-	}
-	shiftPerSubtree := float64(shift) / float64(subtrees)
-	wp.change -= int(math.Round(shiftPerSubtree))
-	wp.shift += shift
-	wm.change += int(math.Round(shiftPerSubtree))
-	wp.prelim += shift
-	wp.mod += shift
-}
-
-func executeShifts(v *tree) {
-	shift := 0
-	change := 0
-	for i := v.childCount - 1; i >= 0; i-- {
-		w := v.children[i]
-		w.prelim += shift
-		w.mod += shift
-		change += w.change
-		shift += w.shift + change
-	}
-}
-
-func getAncestor(vi, v *tree) *tree {
-	if vi.parent == nil || vi.parent != v.parent {
-		return nil
-	}
-	return vi.ancestor
-}
-
-func leftSibling(n *tree) *tree {
-	if n.parent == nil {
-		return nil
-	}
-	idx := -1
-	for i, c := range n.parent.children {
-		if c == n {
-			idx = i
-			break
-		}
-	}
-	if idx > 0 {
-		return n.parent.children[idx-1]
-	}
-	return nil
-}
-
-func leftmostSibling(n *tree) *tree {
-	if n.parent == nil || len(n.parent.children) == 0 {
-		return nil
-	}
-	return n.parent.children[0]
-}
-
-func nextLeft(n *tree) *tree {
-	if n.childCount == 0 {
-		return n.thread
-	}
-	return n.children[0]
-}
-
-func nextRight(n *tree) *tree {
-	if n.childCount == 0 {
-		return n.thread
-	}
-	return n.children[n.childCount-1]
-}
-
+// normalizeCoordinates ensures all coordinates are positive
 func normalizeCoordinates(root *tree) {
-	xmin := findMinX(root)
-	ymin := findMinY(root)
-	adjust(root, xmin, ymin)
+	// Find minimum x and y coordinates
+	minX := findMinX(root)
+	minY := findMinY(root)
+
+	// If any coordinates are negative, shift the entire tree
+	if minX < 0 || minY < 0 {
+		shiftX := 0
+		shiftY := 0
+
+		if minX < 0 {
+			shiftX = -minX
+		}
+
+		if minY < 0 {
+			shiftY = -minY
+		}
+
+		// Shift the entire tree
+		shiftEntireTree(root, shiftX, shiftY)
+	}
 }
 
-func findMinX(n *tree) int {
-	min := n.posX
-	for _, c := range n.children {
-		cx := findMinX(c)
-		if cx < min {
-			min = cx
+// findMinX finds the minimum x-coordinate in the tree
+func findMinX(node *tree) int {
+	min := node.posX
+
+	for _, child := range node.children {
+		childMin := findMinX(child)
+		if childMin < min {
+			min = childMin
 		}
 	}
+
 	return min
 }
 
-func findMinY(n *tree) int {
-	min := n.posY
-	for _, c := range n.children {
-		cy := findMinY(c)
-		if cy < min {
-			min = cy
+// findMinY finds the minimum y-coordinate in the tree
+func findMinY(node *tree) int {
+	min := node.posY
+
+	for _, child := range node.children {
+		childMin := findMinY(child)
+		if childMin < min {
+			min = childMin
 		}
 	}
+
 	return min
 }
 
-func adjust(n *tree, dx, dy int) {
-	n.posX -= dx
-	n.posY -= dy
-	for _, c := range n.children {
-		adjust(c, dx, dy)
+// shiftEntireTree shifts the entire tree by the given amounts
+func shiftEntireTree(node *tree, shiftX, shiftY int) {
+	node.posX += shiftX
+	node.posY += shiftY
+
+	for _, child := range node.children {
+		shiftEntireTree(child, shiftX, shiftY)
 	}
 }
 
-func collectTree(n *tree, out *[]*tree) {
-	*out = append(*out, n)
-	for _, c := range n.children {
-		collectTree(c, out)
+// collectTree gathers all nodes in the tree into a flat slice
+func collectTree(node *tree, result *[]*tree) {
+	node.posY *= -1;
+	*result = append(*result, node)
+
+	for _, child := range node.children {
+		collectTree(child, result)
 	}
 }
 
@@ -837,17 +814,26 @@ func multiDFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 				From_y:  right.posY,
 				From_Id: right.id,
 				To_x:    (right.posX + left.posX) / 2,
-				To_y:    node.posY,
+				To_y:    right.posY + 50,
 				To_Id:   left.id,
 			})
 
 			lines = append(lines, LineInfo{
 				From_x:  (right.posX + left.posX) / 2,
-				From_y:  node.posY,
-				From_Id: node.id,
+				From_y:  right.posY + 50,
+				From_Id: left.id,
+				To_x:    node.posX,
+				To_y:    right.posY + 50,
+				To_Id:   right.id,
+			})
+
+			lines = append(lines, LineInfo{
+				From_x:  node.posX,
+				From_y:  right.posY + 50,
+				From_Id: left.id,
 				To_x:    node.posX,
 				To_y:    node.posY,
-				To_Id:   node.id,
+				To_Id:   right.id,
 			})
 		}
 
@@ -891,7 +877,7 @@ func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 			go func(n *tree) {
 				defer wg.Done()
 
-				fmt.Println("Processing node:", n.now)
+				//fmt.Println("Processing node:", n.now)
 
 				// Track depth
 				safe.mu.Lock()
@@ -901,19 +887,7 @@ func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 
 				// Handle BFS step and enqueue new nodes
 				for _, pair := range recipes[n.now] {
-					if node.now == "Brick" {
-						if pair.First == "Mud" && pair.Second == "Sun" || pair.First == "Sun" && pair.Second == "Mud" {
-							left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
-							right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
-							n.children = append(n.children, left, right)
-							n.childCount += 2
-
-							safe.mu.Lock()
-							safe.queue = append(safe.queue, left, right)
-							safe.mu.Unlock()
-							break
-						}
-					} else if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] {
+					if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] {
 						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
 						right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
 						n.children = append(n.children, left, right)
@@ -1096,17 +1070,26 @@ func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 				From_y:  right.posY,
 				From_Id: right.id,
 				To_x:    (right.posX + left.posX) / 2,
-				To_y:    node.posY,
+				To_y:    right.posY + 50,
 				To_Id:   left.id,
 			})
 
 			lines = append(lines, LineInfo{
 				From_x:  (right.posX + left.posX) / 2,
-				From_y:  node.posY,
-				From_Id: node.id,
+				From_y:  right.posY + 50,
+				From_Id: left.id,
+				To_x:    node.posX,
+				To_y:    right.posY + 50,
+				To_Id:   right.id,
+			})
+
+			lines = append(lines, LineInfo{
+				From_x:  node.posX,
+				From_y:  right.posY + 50,
+				From_Id: left.id,
 				To_x:    node.posX,
 				To_y:    node.posY,
-				To_Id:   node.id,
+				To_Id:   right.id,
 			})
 		}
 
