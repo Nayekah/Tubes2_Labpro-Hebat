@@ -8,6 +8,8 @@ export const recipeMap = {
     ["Heat", "Ice"],
     ["Heat", "Snow"],
   ],
+  Earth: [],
+  Time: [],
   Dust: [
     ["Earth", "Air"],
     ["Soil", "Air"],
