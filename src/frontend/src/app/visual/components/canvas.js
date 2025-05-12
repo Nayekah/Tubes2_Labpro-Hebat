@@ -14,7 +14,7 @@ export default function KonvaCanvas() {
   const imageMapRef = useRef(new Map());
   const [imageIds, setImageIds] = useState([]);
   const [isPending, startTransition] = useTransition();
-  const contentBoundsRef = useRef({ minX: -2000, minY: -2000, maxX: 2000, maxY: 2000, width: 4000, height: 4000 });
+  const contentBoundsRef = useRef({ minX: -7500, minY: -2500, maxX: 7500, maxY: 2500, width: 15000, height: 5000 });
   const insetWidth = 180;
   const insetHeight = 120;
 
@@ -74,12 +74,18 @@ export default function KonvaCanvas() {
     console.log("Using API URL:", apiUrl);
 
     try {
+      console.log("searchParameter:", searchParameter);
       const res = await fetch(`${apiUrl}/api`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ Target: searchParameter.target }),
+        body: JSON.stringify({
+          target: searchParameter.target,
+          method: searchParameter.method,
+          option: searchParameter.option,
+          num_of_recipes: Number(searchParameter.numOfRecipes),
+        }),
       });
 
       const data = await res.json();
@@ -121,7 +127,7 @@ export default function KonvaCanvas() {
             setImageIds((prev) => [...prev, ...ids]);
           });
         }
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, searchParameter.delay));
       }
 
       if (batch.length) {
@@ -155,7 +161,7 @@ export default function KonvaCanvas() {
 
   const visibleLines = useMemo(() => {
     const loadedSet = new Set(imageIds);
-    return lines.filter((line) => loadedSet.has(line.from_id) && loadedSet.has(line.to_id));
+    return (lines || []).filter((line) => loadedSet.has(line.from_id) && loadedSet.has(line.to_id));
   }, [lines, imageIds]);
 
   const handleInsetClick = (e) => {
@@ -245,6 +251,7 @@ export default function KonvaCanvas() {
     method: "BFS",
     option: "Shortest",
     numOfRecipes: 0,
+    delay: 100,
   });
 
   const handleParameterChange = (e) => {
@@ -282,8 +289,8 @@ export default function KonvaCanvas() {
       </div>
 
       {/* Map */}
-      <div className="absolute top-28 right-4 z-10">
-        <div className="bg-white p-1 rounded shadow-md border border-gray-200">
+      <div className="absolute top-32 right-8 z-10">
+        <div className="bg-white p-1 rounded shadow-md border border-gray-500">
           <Stage
             width={insetWidth}
             height={insetHeight}
