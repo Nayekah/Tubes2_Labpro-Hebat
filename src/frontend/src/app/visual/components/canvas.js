@@ -21,6 +21,8 @@ export default function KonvaCanvas({ onTerminalMessage }) {
   const insetHeight = 120;
   const { theme } = useTheme();
   const { language } = useLanguage();
+  const [zoomScale, setZoomScale] = useState(1);
+  
 
   const [hovered, setHovered] = useState(false);
 
@@ -95,6 +97,9 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     setLines([]);
     imageMapRef.current.clear();
     setImageIds([]);
+    // setZoomScale(1);
+    // setStagePos({ x: 0, y: 0 });
+    
 
     const apiUrl = getApiUrl();
     const startTime = Date.now();
@@ -341,6 +346,60 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     }));
   };
 
+    const handleWheel = (e) => {
+    // Prevent default scroll behavior
+    e.evt.preventDefault();
+    
+    const stage = e.target.getStage();
+    const scaleBy = 1.1;
+    const currentScale = stage.scaleX();
+    
+    // Get pointer position
+    const pointerPos = stage.getPointerPosition();
+    
+    // Determine zoom direction
+    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    
+    // Calculate new scale with more controlled approach
+    const newScale = direction > 0 
+      ? currentScale * scaleBy 
+      : currentScale / scaleBy;
+    
+    // Limit zoom range
+    const clampedZoomScale = Math.max(0.1, Math.min(newScale, 10));
+    
+    // Calculate new position to zoom towards pointer
+    const stagePos = stage.position();
+    const mousePointTo = {
+      x: (pointerPos.x - stagePos.x) / currentScale,
+      y: (pointerPos.y - stagePos.y) / currentScale
+    };
+
+    const newPos = {
+      x: pointerPos.x - mousePointTo.x * clampedZoomScale,
+      y: pointerPos.y - mousePointTo.y * clampedZoomScale
+    };
+
+    // Limit panning to keep content partially visible
+    const maxX = 0;
+    const maxY = 0;
+    const minX = stageSize.width - (stageSize.width * clampedZoomScale);
+    const minY = stageSize.height - (stageSize.height * clampedZoomScale);
+
+    const boundedX = Math.min(Math.max(newPos.x, minX), maxX);
+    const boundedY = Math.min(Math.max(newPos.y, minY), maxY);
+
+    // Apply transformations
+    stage.scale({ x: clampedZoomScale, y: clampedZoomScale });
+    stage.position({ x: boundedX, y: boundedY });
+    
+    stage.batchDraw();
+    
+    // Update local state to trigger re-render and show zoom percentage
+    setZoomScale(clampedZoomScale);
+  };
+
+
   return (
     <div className={`relative ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'} min-h-screen`}>
       <div className="absolute top-24 z-10 bg-white dark:bg-gray-800 p-1 rounded shadow-md">
@@ -409,6 +468,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
         width={stageSize.width}
         height={stageSize.height}
         draggable
+        onWheel={handleWheel}
         ref={stageRef}
         onDragMove={(e) => {
           const stage = e.target;
