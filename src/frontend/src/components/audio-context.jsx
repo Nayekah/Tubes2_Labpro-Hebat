@@ -26,7 +26,7 @@ export function AudioProvider({ children }) {
   const audioRef = useRef(null)
   const audioInitializedRef = useRef(false)
   
-  // Initialize audio element - use ref instead of state to prevent loops
+  // Initialize audio element WITHOUT auto-play
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioInitializedRef.current) {
       audioRef.current = new Audio(currentSong.url)
@@ -66,24 +66,18 @@ export function AudioProvider({ children }) {
         if (playPromise !== undefined) {
           playPromise.catch(err => {
             console.log("Play error:", err)
-            // Auto-retry play on user interaction
-            const handleUserInteraction = () => {
-              audioRef.current.play()
-              document.removeEventListener('click', handleUserInteraction)
-            }
-            document.addEventListener('click', handleUserInteraction)
           })
         }
       }
     }
   }, [currentSong]) // Only depends on currentSong changes
 
-  // Handle volume changes - without depending on isMuted in dependencies
+  // Handle volume changes
   useEffect(() => {
     if (audioRef.current && audioInitializedRef.current) {
       audioRef.current.volume = volume
       
-      // Update muted state based on volume without creating a loop
+      // Update muted state based on volume
       if (volume === 0 && !isMuted) {
         setIsMuted(true)
         audioRef.current.muted = true
@@ -92,65 +86,14 @@ export function AudioProvider({ children }) {
         audioRef.current.muted = false
       }
     }
-  }, [volume]) // Only depends on volume changes
+  }, [volume])
   
-  // Separate effect for muted changes to avoid loops
+  // Handle muted changes
   useEffect(() => {
     if (audioRef.current && audioInitializedRef.current) {
       audioRef.current.muted = isMuted
     }
   }, [isMuted])
-
-  // Persist audio state between page loads
-  useEffect(() => {
-    if (typeof window !== 'undefined' && audioInitializedRef.current) {
-      const handleBeforeUnload = () => {
-        // We need to store playback state before unload
-        if (audioRef.current && !audioRef.current.paused) {
-          localStorage.setItem('music-playing', 'true')
-          localStorage.setItem('current-song', JSON.stringify(currentSong))
-          localStorage.setItem('volume-level', volume.toString())
-        }
-      }
-      
-      window.addEventListener('beforeunload', handleBeforeUnload)
-      
-      // Try to restore state - but only once
-      const restoreState = () => {
-        const wasPlaying = localStorage.getItem('music-playing') === 'true'
-        const savedSong = localStorage.getItem('current-song')
-        const savedVolume = localStorage.getItem('volume-level')
-        
-        if (savedVolume) {
-          setVolume(parseFloat(savedVolume))
-        }
-        
-        if (savedSong) {
-          try {
-            setCurrentSong(JSON.parse(savedSong))
-          } catch (e) {
-            console.error("Failed to parse saved song", e)
-          }
-        }
-        
-        if (wasPlaying && audioRef.current) {
-          // We need to wait for user interaction before playing
-          const handleUserInteraction = () => {
-            audioRef.current.play().catch(err => console.log("Play error on restore:", err))
-            document.removeEventListener('click', handleUserInteraction)
-          }
-          document.addEventListener('click', handleUserInteraction)
-        }
-      }
-      
-      // Only restore once
-      restoreState()
-      
-      return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-      }
-    }
-  }, []) // Empty dependency to run once
 
   const playSong = (song) => {
     setCurrentSong(song)
@@ -161,12 +104,6 @@ export function AudioProvider({ children }) {
       if (playPromise !== undefined) {
         playPromise.catch(err => {
           console.log("Play error:", err)
-          // Auto-retry play on user interaction
-          const handleUserInteraction = () => {
-            audioRef.current.play()
-            document.removeEventListener('click', handleUserInteraction)
-          }
-          document.addEventListener('click', handleUserInteraction)
         })
       }
       
@@ -184,13 +121,6 @@ export function AudioProvider({ children }) {
         if (playPromise !== undefined) {
           playPromise.catch(err => {
             console.log("Play error on toggle:", err)
-            // Auto-retry play on user interaction
-            const handleUserInteraction = () => {
-              audioRef.current.play()
-              setIsPlaying(true)
-              document.removeEventListener('click', handleUserInteraction)
-            }
-            document.addEventListener('click', handleUserInteraction)
           })
         }
       }
