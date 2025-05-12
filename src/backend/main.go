@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -122,55 +123,68 @@ func getImageURL(c *gin.Context, imageName string) string {
 	return fmt.Sprintf("%s://%s/images/%s_2.svg", scheme, host, imageName)
 }
 
-// runScraperProcess executes the scraper.go file to generate data
 func runScraperProcess() error {
 	fmt.Println("Running scraper to generate data files...")
 
-	// Create data directory if it doesn't exist
 	dataDir := filepath.Dir(RECIPES_PATH)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	// Get the current directory
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	// Look for scraper.go in the usual locations
-	scraperLocs := []string{
-		filepath.Join(currentDir, "scraper.go"),
-		filepath.Join(currentDir, "backend", "scraper.go"),
-		filepath.Join(currentDir, "..", "backend", "scraper.go"),
-		filepath.Join(currentDir, "backend", "scraper", "scraper.go"),
-		filepath.Join(currentDir, "..", "backend", "scraper", "scraper.go"),
+	scraperBinary := filepath.Join(currentDir, "scraper")
+	if runtime.GOOS == "windows" {
+		scraperBinary = scraperBinary + ".exe"
 	}
 
-	var scraperPath string
-	for _, loc := range scraperLocs {
-		if _, err := os.Stat(loc); err == nil {
-			scraperPath = loc
-			break
+	if _, err := os.Stat(scraperBinary); err == nil && (os.Getenv("GIN_MODE") == "release" || os.Getenv("DOCKER") == "true") {
+		fmt.Printf("Found scraper binary at: %s\n", scraperBinary)
+		cmd := exec.Command(scraperBinary)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		cmd.Env = os.Environ()
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to run scraper: %w", err)
+		}
+	} else {
+		fmt.Println("Running in local development mode, looking for scraper.go...")
+
+		scraperLocs := []string{
+			filepath.Join(currentDir, "scraper", "scraper.go"),
+			filepath.Join(currentDir, "scraper.go"),
+			"scraper/scraper.go",
+			"backend/scraper/scraper.go",
+		}
+
+		var scraperPath string
+		for _, loc := range scraperLocs {
+			fmt.Printf("Checking: %s\n", loc)
+			if _, err := os.Stat(loc); err == nil {
+				scraperPath = loc
+				fmt.Printf("Found scraper at: %s\n", scraperPath)
+				break
+			}
+		}
+
+		if scraperPath == "" {
+			return fmt.Errorf("scraper.go not found in expected locations. Checked: %v", scraperLocs)
+		}
+
+		cmd := exec.Command("go", "run", scraperPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to run scraper: %w", err)
 		}
 	}
 
-	if scraperPath == "" {
-		return fmt.Errorf("scraper.go not found in expected locations")
-	}
-
-	fmt.Printf("Found scraper at: %s\n", scraperPath)
-
-	// Run go run scraper.go
-	cmd := exec.Command("go", "run", scraperPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run scraper: %w", err)
-	}
-
-	// Verify data files were created
 	if _, err := os.Stat(RECIPES_PATH); os.IsNotExist(err) {
 		return fmt.Errorf("scraper did not create recipes file at %s", RECIPES_PATH)
 	}
@@ -580,7 +594,7 @@ func shiftEntireTree(node *tree, shiftX, shiftY int) {
 
 // collectTree gathers all nodes in the tree into a flat slice
 func collectTree(node *tree, result *[]*tree) {
-	node.posY *= -1;
+	node.posY *= -1
 	*result = append(*result, node)
 
 	for _, child := range node.children {

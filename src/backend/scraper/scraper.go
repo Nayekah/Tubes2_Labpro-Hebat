@@ -53,10 +53,24 @@ func fetchDocument() (*goquery.Document, error) {
 
 func main() {
 	totalStart := time.Now()
-	root := getRootDir()
-	dataDir := filepath.Join(root, "backend", "data")
+
+	var dataDir string
+
+	if os.Getenv("GIN_MODE") == "release" || os.Getenv("DOCKER") == "true" {
+		dataDir = "data"
+		fmt.Println("Running in container mode")
+	} else {
+		root := getRootDir()
+		dataDir = filepath.Join(root, "backend", "data")
+		fmt.Println("Running in local development mode")
+	}
+
 	imagesPath := filepath.Join(dataDir, "images.csv")
 	recipesPath := filepath.Join(dataDir, "recipes.csv")
+
+	fmt.Printf("Data directory: %s\n", dataDir)
+	fmt.Printf("Images path: %s\n", imagesPath)
+	fmt.Printf("Recipes path: %s\n", recipesPath)
 
 	doc, err := fetchDocument()
 	if err != nil {
