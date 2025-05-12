@@ -4,6 +4,7 @@ import BurgerMenu from "../../components/burgermenu.jsx";
 import { useTheme } from "next-themes";
 import { useLanguage } from "@/components/language-context";
 import SearchRecipe from "@/app/components/search.jsx";
+import { stages } from "konva/lib/Stage.js";
 
 export default function KonvaCanvas({ onTerminalMessage }) {
   const stageRef = useRef(null);
@@ -22,13 +23,12 @@ export default function KonvaCanvas({ onTerminalMessage }) {
   const { theme } = useTheme();
   const { language } = useLanguage();
   const [zoomScale, setZoomScale] = useState(1);
-  
+  const [isImageHovered, setIsImageHovered] = useState(false);
 
   const [hovered, setHovered] = useState(false);
 
   const CanvasImage = ({ img, x, y }) => {
     const imageRef = useRef();
-    const [localHovered, setLocalHovered] = useState(false);
 
     useEffect(() => {
       const node = imageRef.current;
@@ -39,37 +39,26 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     }, [img.image]);
 
     return (
-      <Group x={x} y={y} onMouseEnter={() => setLocalHovered(true)} onMouseLeave={() => setLocalHovered(false)}>
+      <Group x={x} y={y} onMouseEnter={() => setIsImageHovered(true)} onMouseLeave={() => setIsImageHovered(false)}>
         {/* Background */}
-        <Rect 
-          width={60} 
-          height={60} 
-          fill={theme === 'dark' ? "#374151" : "#ddd"} 
-          cornerRadius={8} 
-        />
+        <Rect width={60} height={60} fill={theme === "dark" ? "#374151" : "#ddd"} cornerRadius={8} />
 
         {/* Image */}
         <KonvaImage x={5} y={5} width={50} height={50} ref={imageRef} image={img.image} />
 
         {/* Border */}
-        <Rect 
-          width={60} 
-          height={60} 
-          stroke={theme === 'dark' ? "#9ca3af" : "black"} 
-          strokeWidth={1} 
-          cornerRadius={8} 
-        />
+        <Rect width={60} height={60} stroke={theme === "dark" ? "#9ca3af" : "black"} strokeWidth={1} cornerRadius={8} />
 
         {/* Text */}
-        {localHovered && (
-          <Text 
-            text={img.image_name || "???"} 
-            fontSize={13} 
-            fill={theme === 'dark' ? "#f3f4f6" : "black"} 
-            x={0} 
-            y={65} 
-            width={60} 
-            align="center" 
+        {isImageHovered && (
+          <Text
+            text={img.image_name || "???"}
+            fontSize={13}
+            fill={theme === "dark" ? "#f3f4f6" : "black"}
+            x={0}
+            y={65}
+            width={60}
+            align="center"
           />
         )}
       </Group>
@@ -104,11 +93,10 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     setImageIds([]);
     // setZoomScale(1);
     // setStagePos({ x: 0, y: 0 });
-    
 
     const apiUrl = getApiUrl();
     const startTime = Date.now();
-    
+
     const t = {
       id: {
         searching: "Mencari",
@@ -120,7 +108,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
         serverExecutionTime: "Waktu Eksekusi Server",
         visualizationComplete: "Visualisasi selesai",
         clientRequestTime: "Waktu Permintaan Klien",
-        error: "Error"
+        error: "Error",
       },
       en: {
         searching: "Searching for",
@@ -132,17 +120,17 @@ export default function KonvaCanvas({ onTerminalMessage }) {
         serverExecutionTime: "Server execution time",
         visualizationComplete: "Visualization complete",
         clientRequestTime: "Client request time",
-        error: "Error"
-      }
+        error: "Error",
+      },
     }[language];
-    
+
     if (onTerminalMessage) {
-      onTerminalMessage('-----------------------------------', 'divider');
-      onTerminalMessage(`${t.searching}: ${searchParameter.target}`, 'info');
-      onTerminalMessage(`${t.method}: ${searchParameter.method}`, 'info');
-      onTerminalMessage(`${t.option}: ${searchParameter.option}`, 'info');
-      if (searchParameter.option === 'Multiple') {
-        onTerminalMessage(`${t.recipesToShow}: ${searchParameter.numOfRecipes}`, 'info');
+      onTerminalMessage("-----------------------------------", "divider");
+      onTerminalMessage(`${t.searching}: ${searchParameter.target}`, "info");
+      onTerminalMessage(`${t.method}: ${searchParameter.method}`, "info");
+      onTerminalMessage(`${t.option}: ${searchParameter.option}`, "info");
+      if (searchParameter.option === "Multiple") {
+        onTerminalMessage(`${t.recipesToShow}: ${searchParameter.numOfRecipes}`, "info");
       }
     }
 
@@ -168,18 +156,17 @@ export default function KonvaCanvas({ onTerminalMessage }) {
       const images_data = data.images;
       const line_data = data.lines;
       setLines(line_data);
-      
+
       const endTime = Date.now();
       const executionTime = endTime - startTime;
-      
+
       if (onTerminalMessage) {
-        onTerminalMessage(`✓ ${t.serverResponded}`, 'success');
-        onTerminalMessage(`${t.nodesVisited}: ${images_data.length}`, 'info');
-        onTerminalMessage(`${t.serverExecutionTime}: ${executionTime}ms`, 'info');
+        onTerminalMessage(`✓ ${t.serverResponded}`, "success");
+        onTerminalMessage(`${t.nodesVisited}: ${images_data.length}`, "info");
+        onTerminalMessage(`${t.serverExecutionTime}: ${executionTime}ms`, "info");
       }
 
       let firstImage = images_data[0];
-      console.log("firstImage:", firstImage);
       if (firstImage) {
         const mainStage = stageRef.current;
         const targetX = -firstImage.image_pos_col;
@@ -220,18 +207,18 @@ export default function KonvaCanvas({ onTerminalMessage }) {
           setImageIds((prev) => [...prev, ...batch]);
         });
       }
-      
+
       if (onTerminalMessage) {
         const totalTime = Date.now() - startTime;
-        onTerminalMessage(`✓ ${t.visualizationComplete}`, 'success');
-        onTerminalMessage(`${t.clientRequestTime}: ${totalTime}ms`, 'info');
-        onTerminalMessage('-----------------------------------', 'divider');
+        onTerminalMessage(`✓ ${t.visualizationComplete}`, "success");
+        onTerminalMessage(`${t.clientRequestTime}: ${totalTime}ms`, "info");
+        onTerminalMessage("-----------------------------------", "divider");
       }
     } catch (err) {
       setError(err.message);
       if (onTerminalMessage) {
-        onTerminalMessage(`✗ ${t.error}: ${err.message}`, 'error');
-        onTerminalMessage('-----------------------------------', 'divider');
+        onTerminalMessage(`✗ ${t.error}: ${err.message}`, "error");
+        onTerminalMessage("-----------------------------------", "divider");
       }
     }
     setLoading(false);
@@ -239,21 +226,35 @@ export default function KonvaCanvas({ onTerminalMessage }) {
 
   const visibleImages = useMemo(() => {
     const visible = [];
+
+    // Convert the current screen viewport to canvas coordinates
+    const viewLeft = -stagePos.x / zoomScale;
+    const viewTop = -stagePos.y / zoomScale;
+    const viewRight = viewLeft + stageSize.width / zoomScale;
+    const viewBottom = viewTop + stageSize.height / zoomScale;
+
     for (const id of imageIds) {
       const img = imageMapRef.current.get(id);
       const x = stageSize.width / 2 - 100 + img.image_pos_col;
       const y = stageSize.height / 2 + img.image_pos_row;
-      if (
-        x + 60 > -stagePos.x &&
-        x < -stagePos.x + stageSize.width &&
-        y + 60 > -stagePos.y &&
-        y < -stagePos.y + stageSize.height
-      ) {
+
+      // Don't forget to convert image size too (if it's fixed in screen pixels, leave it as-is)
+      const imgWidth = 60;
+      const imgHeight = 60;
+
+      // Apply proper bounds logic in canvas coordinates
+      const imgLeft = x;
+      const imgRight = x + imgWidth;
+      const imgTop = y;
+      const imgBottom = y + imgHeight;
+
+      if (imgRight >= viewLeft && imgLeft <= viewRight && imgBottom >= viewTop && imgTop <= viewBottom) {
         visible.push({ ...img, x, y });
       }
     }
+
     return visible;
-  }, [imageIds, stagePos, stageSize]);
+  }, [imageIds, stagePos, stageSize, zoomScale]);
 
   const visibleLines = useMemo(() => {
     const loadedSet = new Set(imageIds);
@@ -351,45 +352,43 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     }));
   };
 
-    const handleWheel = (e) => {
+  const handleWheel = (e) => {
     // Prevent default scroll behavior
     e.evt.preventDefault();
-    
+
     const stage = e.target.getStage();
     const scaleBy = 1.1;
-    const currentScale = stage.scaleX();
-    
+    const currentScale = zoomScale;
+
     // Get pointer position
     const pointerPos = stage.getPointerPosition();
-    
+
     // Determine zoom direction
     const direction = e.evt.deltaY > 0 ? -1 : 1;
-    
+
     // Calculate new scale with more controlled approach
-    const newScale = direction > 0 
-      ? currentScale * scaleBy 
-      : currentScale / scaleBy;
-    
+    const newScale = direction > 0 ? currentScale * scaleBy : currentScale / scaleBy;
+
     // Limit zoom range
     const clampedZoomScale = Math.max(0.1, Math.min(newScale, 10));
-    
+
     // Calculate new position to zoom towards pointer
     const stagePos = stage.position();
     const mousePointTo = {
       x: (pointerPos.x - stagePos.x) / currentScale,
-      y: (pointerPos.y - stagePos.y) / currentScale
+      y: (pointerPos.y - stagePos.y) / currentScale,
     };
 
     const newPos = {
       x: pointerPos.x - mousePointTo.x * clampedZoomScale,
-      y: pointerPos.y - mousePointTo.y * clampedZoomScale
+      y: pointerPos.y - mousePointTo.y * clampedZoomScale,
     };
 
     // Limit panning to keep content partially visible
     const maxX = 0;
     const maxY = 0;
-    const minX = stageSize.width - (stageSize.width * clampedZoomScale);
-    const minY = stageSize.height - (stageSize.height * clampedZoomScale);
+    const minX = stageSize.width - stageSize.width * clampedZoomScale;
+    const minY = stageSize.height - stageSize.height * clampedZoomScale;
 
     const boundedX = Math.min(Math.max(newPos.x, minX), maxX);
     const boundedY = Math.min(Math.max(newPos.y, minY), maxY);
@@ -397,16 +396,15 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     // Apply transformations
     stage.scale({ x: clampedZoomScale, y: clampedZoomScale });
     stage.position({ x: boundedX, y: boundedY });
-    
+
     stage.batchDraw();
-    
+
     // Update local state to trigger re-render and show zoom percentage
     setZoomScale(clampedZoomScale);
   };
 
-
   return (
-    <div className={`relative ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'} min-h-screen`}>
+    <div className={`relative ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"} min-h-screen`}>
       <div className="absolute top-24 z-10 bg-white dark:bg-gray-800 p-1 rounded shadow-md">
         <BurgerMenu
           parameter={searchParameter}
@@ -414,7 +412,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
           isLoading={loading}
           fetchHandler={fetchImages}
         />
-        <SearchRecipe/>
+        <SearchRecipe />
       </div>
 
       {/* Map */}
@@ -427,13 +425,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
             ref={insetStageRef}
             style={{ cursor: "pointer" }}>
             <Layer>
-              <Rect 
-                x={0} 
-                y={0} 
-                width={insetWidth} 
-                height={insetHeight} 
-                fill={theme === 'dark' ? "#1f2937" : "#f0f0f0"} 
-              />
+              <Rect x={0} y={0} width={insetWidth} height={insetHeight} fill={theme === "dark" ? "#1f2937" : "#f0f0f0"} />
 
               {(() => {
                 const bounds = contentBoundsRef.current;
@@ -455,9 +447,9 @@ export default function KonvaCanvas({ onTerminalMessage }) {
                     y={viewY}
                     width={viewWidth}
                     height={viewHeight}
-                    stroke={theme === 'dark' ? "#ef4444" : "red"}
+                    stroke={theme === "dark" ? "#ef4444" : "red"}
                     strokeWidth={1.5}
-                    fill={theme === 'dark' ? "#ef4444" : "red"}
+                    fill={theme === "dark" ? "#ef4444" : "red"}
                     opacity={0.2}
                   />
                 );
@@ -486,10 +478,10 @@ export default function KonvaCanvas({ onTerminalMessage }) {
             y={-stagePos.y}
             width={stageSize.width}
             height={stageSize.height}
-            fill={theme === 'dark' ? "#111827" : "#f9fafb"}
+            fill={theme === "dark" ? "#111827" : "#f9fafb"}
           />
         </Layer>
-        
+
         <Layer>
           {visibleLines.map((line, i) => {
             const from_x = stageSize.width / 2 - 100 + line.from_x + 30;
@@ -497,33 +489,25 @@ export default function KonvaCanvas({ onTerminalMessage }) {
             const to_x = stageSize.width / 2 - 100 + line.to_x + 30;
             const to_y = stageSize.height / 2 + line.to_y + 30;
             return (
-              <Line 
-                key={i} 
-                points={[from_x, from_y, to_x, to_y]} 
-                stroke={theme === 'dark' ? "#6b7280" : "black"} 
-                strokeWidth={2} 
+              <Line
+                key={i}
+                points={[from_x, from_y, to_x, to_y]}
+                stroke={theme === "dark" ? "#6b7280" : "black"}
+                strokeWidth={2}
               />
             );
           })}
         </Layer>
 
         <Layer>
-          {error && (
-            <Text 
-              text={error} 
-              fontSize={20} 
-              fill={theme === 'dark' ? "#ef4444" : "red"} 
-              x={100} 
-              y={100} 
-            />
-          )}
+          {error && <Text text={error} fontSize={20} fill={theme === "dark" ? "#ef4444" : "red"} x={100} y={100} />}
           {loading && (
-            <Text 
-              text={language === 'id' ? "Memuat..." : "Loading..."} 
-              fontSize={20} 
-              fill={theme === 'dark' ? "#f3f4f6" : "black"} 
-              x={100} 
-              y={130} 
+            <Text
+              text={language === "id" ? "Memuat..." : "Loading..."}
+              fontSize={20}
+              fill={theme === "dark" ? "#f3f4f6" : "black"}
+              x={100}
+              y={130}
             />
           )}
 
