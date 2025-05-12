@@ -4,17 +4,38 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FaBookOpen } from "react-icons/fa6";
 import { useTheme } from "next-themes";
+import { useLanguage } from "@/components/language-context";
 import "./burgermenu.css";
 
 function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const { theme } = useTheme();
+  const { language } = useLanguage();
   const [query, setQuery] = useState("");
 
   const result = recipeMap[query.trim()];
   const suggestions = Object.keys(recipeMap).filter((name) =>
     name.toLowerCase().includes(query.toLowerCase())
   );
+
+  const texts = {
+    id: {
+      searchRecipes: "Cari resep!",
+      enterElementName: "Masukkan nama elemen",
+      suggestions: "Saran:",
+      recipesFor: "Resep untuk",
+      noRecipesFound: "Resep tidak ditemukan untuk"
+    },
+    en: {
+      searchRecipes: "Search recipes!",
+      enterElementName: "Enter element name",
+      suggestions: "Suggestions:",
+      recipesFor: "Recipes for",
+      noRecipesFound: "No recipes found for"
+    }
+  };
+
+  const t = texts[language];
 
   return (
     <>
@@ -35,12 +56,12 @@ function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange })
 
         <div className="multiple-extra-option">
           <label className="text-gray-700 dark:text-gray-300">
-            Search recipes!
+            {t.searchRecipes}
             <Input
-              className="value-form"
+              className="value-form bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-600"
               name="search"
               type="text"
-              placeholder="Enter element name"
+              placeholder={t.enterElementName}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -49,10 +70,15 @@ function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange })
 
         {query && (
           <div style={{ marginTop: "10px" }} className="text-gray-700 dark:text-gray-300">
-            <h4>Suggestions:</h4>
+            <h4>{t.suggestions}</h4>
             <ul>
               {suggestions.slice(0, 10).map((name) => (
-                <li key={name} onClick={() => setQuery(name)} style={{ cursor: "pointer" }}>
+                <li 
+                  key={name} 
+                  onClick={() => setQuery(name)} 
+                  style={{ cursor: "pointer" }}
+                  className="hover:text-purple-500 transition-colors"
+                >
                   {name}
                 </li>
               ))}
@@ -62,7 +88,7 @@ function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange })
 
         {result && (
           <div style={{ marginTop: "20px" }} className="text-gray-700 dark:text-gray-300">
-            <h4>Recipes for: <strong>{query}</strong></h4>
+            <h4>{t.recipesFor}: <strong>{query}</strong></h4>
             <ul>
               {result.map(([a, b], i) => (
                 <li key={i}>{a} + {b}</li>
@@ -71,7 +97,11 @@ function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange })
           </div>
         )}
 
-        {!result && query && <p className="text-gray-700 dark:text-gray-300">No recipes found for "{query}".</p>}
+        {!result && query && (
+          <p className="text-gray-700 dark:text-gray-300">
+            {t.noRecipesFound} "{query}".
+          </p>
+        )}
       </div>
 
       {isOpen && <div className="overlay" onClick={() => setIsOpen(false)} />}
