@@ -2,6 +2,7 @@ import { recipeMap } from "./recipes";
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { FaBookOpen } from "react-icons/fa6";
 
 import "./burgermenu.css";
 
@@ -17,10 +18,10 @@ function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange })
   return (
     <>
       <Button
-        className="bg-white text-black border border-gray-300 rounded-md px-4 py-2 fixed top-30 left-40"
+        className="bg-white text-black border border-gray-300 rounded-md px-4 py-2 fixed top-30 left-20"
         onClick={() => setIsOpen(true)}
       >
-        ☰
+        <FaBookOpen/>
       </Button>
 
       <div className={`side-panel ${isOpen ? "open" : ""}`}>
