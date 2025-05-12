@@ -4,6 +4,7 @@ import LanguageSelector from "@/components/language-selector";
 import { useLanguage } from "@/components/language-context";
 import { useAudio } from "@/components/audio-context";
 import Image from "next/image";
+import Link from "next/link";
 import ThemeToggle from "@/components/theme-toggle";
 import { translations } from "@/components/translations";
 import { useTheme } from "next-themes";
@@ -80,7 +81,9 @@ const Navbar = () => {
       className="navbar-transition fixed top-0 left-0 right-0 z-10 backdrop-blur-sm bg-white/80 dark:bg-black/80 border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Image src="/ikuyo.png" alt="Ikuyoooo" width={70} height={70} className="text-purple-600" />
+          <Link href="/" className="cursor-pointer hover:opacity-80 transition-opacity">
+            <Image src="/ikuyo.png" alt="Ikuyoooo" width={70} height={70} className="text-purple-600" />
+          </Link>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative md:flex items-center search-container">
