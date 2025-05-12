@@ -4,11 +4,14 @@ import LanguageSelector from "@/components/language-selector";
 import { useLanguage } from "@/components/language-context";
 import { useAudio } from "@/components/audio-context";
 import Image from "next/image";
+import Link from "next/link";
 import ThemeToggle from "@/components/theme-toggle";
 import { translations } from "@/components/translations";
+import { useTheme } from "next-themes";
 
 const Navbar = () => {
   const { language } = useLanguage();
+  const { theme } = useTheme();
   const t = translations[language];
   const { 
     isPlaying, 
@@ -75,16 +78,18 @@ const Navbar = () => {
   return (
     <header
       ref={headerRef}
-      className="fixed top-0 left-0 right-0 z-10 backdrop-blur-sm bg-white/80 dark:bg-black/80 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+      className="navbar-transition fixed top-0 left-0 right-0 z-10 backdrop-blur-sm bg-white/80 dark:bg-black/80 border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Image src="/ikuyo.png" alt="Ikuyoooo" width={70} height={70} className="text-purple-600" />
+          <Link href="/" className="cursor-pointer hover:opacity-80 transition-opacity">
+            <Image src="/ikuyo.png" alt="Ikuyoooo" width={70} height={70} className="text-purple-600" />
+          </Link>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative md:flex items-center search-container">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
+                <Search className="h-4 w-4 text-gray-400 dark:text-gray-500" />
               </div>
               <input
                 type="text"
@@ -92,11 +97,11 @@ const Navbar = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowResults(true)}
-                className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 w-64"
+                className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-800 dark:text-white w-64"
               />
             </div>
 
-            {/* Dropdown hasil pencarian */}
+            {/* Search results dropdown */}
             {showResults && (
               <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg rounded-lg z-10 max-h-60 overflow-y-auto">
                 <div className="p-2 text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -111,7 +116,7 @@ const Navbar = () => {
                       onClick={() => handleSelectSong(song)}>
                       <Music className="h-4 w-4 mr-2 text-purple-500" />
                       <div>
-                        <div className="font-medium">{song.title}</div>
+                        <div className="font-medium dark:text-white">{song.title}</div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">{song.artist}</div>
                       </div>
                     </div>
@@ -123,27 +128,27 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Player controls with toggle volume bar */}
+          {/* Player controls */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2">
             <button
               onClick={togglePlayPause}
               className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               aria-label={isPlaying ? "Pause" : "Play"}>
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+              {isPlaying ? <Pause className="h-5 w-5 dark:text-white" /> : <Play className="h-5 w-5 dark:text-white" />}
             </button>
 
             <div className="mx-3 max-w-32 truncate">
-              <div className="font-medium text-sm">{currentSong.title}</div>
+              <div className="font-medium text-sm dark:text-white">{currentSong.title}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">{currentSong.artist}</div>
             </div>
 
-            {/* Volume control with togglable bar */}
+            {/* Volume control */}
             <div className="relative volume-container">
               <button
                 onClick={toggleVolumeBar}
                 className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors volume-button"
-                aria-label={isMuted ? "Unmute" : "Atur Volume"}>
-                {getVolumeIcon()}
+                aria-label={isMuted ? "Unmute" : "Adjust Volume"}>
+                <span className="dark:text-white">{getVolumeIcon()}</span>
               </button>
 
               {showVolumeBar && (
