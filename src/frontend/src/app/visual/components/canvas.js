@@ -71,6 +71,11 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     }
 
     if (typeof window !== "undefined") {
+      if (window.location.hostname === "seleksiasistenlabpro.xyz" || 
+        window.location.hostname === "www.seleksiasistenlabpro.xyz") {
+        return "/api";
+      }
+
       const protocol = window.location.protocol;
       const hostname = window.location.hostname;
 
