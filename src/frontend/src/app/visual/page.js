@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Navbar from "../components/navbar.jsx";
+import TerminalLog from "../components/terminal-log.js";
+import { useTheme } from "next-themes";
 
 // Dynamically import KonvaCanvas to avoid SSR issues with window
 const KonvaCanvas = dynamic(() => import("./components/canvas.js"), {
@@ -11,6 +13,8 @@ const KonvaCanvas = dynamic(() => import("./components/canvas.js"), {
 
 export default function Home() {
   const stageRef = useRef(null);
+  const [terminalMessages, setTerminalMessages] = useState([]);
+  const { theme } = useTheme();
 
   const handleZoomIn = () => {
     if (stageRef.current) {
@@ -70,10 +74,23 @@ export default function Home() {
     }
   };
 
+  const addTerminalMessage = (text, type = 'info') => {
+    const newMessage = {
+      text,
+      time: new Date().toLocaleTimeString(),
+      type
+    };
+    setTerminalMessages(prev => [...prev, newMessage]);
+  };
+
   return (
-    <div className="app-container">
+    <div className={`app-container ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'} min-h-screen`}>
       <Navbar />
-      <KonvaCanvas stageRef={stageRef} />
+      <KonvaCanvas 
+        stageRef={stageRef} 
+        onTerminalMessage={addTerminalMessage}
+      />
+      <TerminalLog messages={terminalMessages} />
     </div>
   );
 }
