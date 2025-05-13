@@ -78,7 +78,7 @@ function SearchRecipe({ isLoading, fetchHandler, parameter, onParameterChange })
   return (
     <>
       <Button
-        className="bg-white dark:bg-gray-800 text-black border border-gray-300 rounded-md px-4 py-2 fixed top-30 left-20"
+        className="bg-white dark:bg-gray-800 text-black border border-gray-300 rounded-md px-4 py-2 fixed top-30 left-20 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         onClick={() => setIsOpen(true)}
       >
         <FaBookOpen className="text-black dark:text-white"/>

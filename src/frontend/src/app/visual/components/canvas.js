@@ -12,6 +12,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
   const [error, setError] = useState(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const imageMapRef = useRef(new Map());
@@ -71,8 +72,10 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     }
 
     if (typeof window !== "undefined") {
-      if (window.location.hostname === "seleksiasistenlabpro.xyz" || 
-        window.location.hostname === "www.seleksiasistenlabpro.xyz") {
+      if (
+        window.location.hostname === "seleksiasistenlabpro.xyz" ||
+        window.location.hostname === "www.seleksiasistenlabpro.xyz"
+      ) {
         return "/api";
       }
 
@@ -88,11 +91,13 @@ export default function KonvaCanvas({ onTerminalMessage }) {
   const fetchImages = async (e) => {
     e.preventDefault();
     setLoading(true);
+    loadingRef.current = true;
     setLines([]);
     imageMapRef.current.clear();
     setImageIds([]);
-    // setZoomScale(1);
-    // setStagePos({ x: 0, y: 0 });
+
+    let test = loading;
+    console.log(test);
 
     const apiUrl = getApiUrl();
     const startTime = Date.now();
@@ -182,6 +187,9 @@ export default function KonvaCanvas({ onTerminalMessage }) {
 
       const batch = [];
       for (const imgData of images_data) {
+        console.log(loadingRef.current);
+        if (!loadingRef.current) break;
+
         const img = new window.Image();
         img.src = imgData.image_link;
         await new Promise((resolve) => {
@@ -222,6 +230,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
       }
     }
     setLoading(false);
+    loadingRef.current = false;
   };
 
   const visibleImages = useMemo(() => {
@@ -342,6 +351,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     option: "Shortest",
     numOfRecipes: 1,
     delay: 100,
+    includeTime: true,
   });
 
   const handleParameterChange = (e) => {
@@ -395,7 +405,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
 
     // Apply transformations
     stage.scale({ x: clampedZoomScale, y: clampedZoomScale });
-    stage.position({ x: boundedX, y: boundedY });
+    stage.position({ x: stagePos.x * currentScale, y: stagePos.y });
 
     stage.batchDraw();
 
@@ -411,6 +421,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
           onParameterChange={handleParameterChange}
           isLoading={loading}
           fetchHandler={fetchImages}
+          loadingRef={loadingRef}
         />
         <SearchRecipe />
       </div>
