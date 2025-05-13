@@ -12,7 +12,7 @@ services:
       - "8080"
     volumes:
       - ./src/backend/data:/app/data
-    restart: unless-stopped
+    restart: always
     networks:
       - app-network
 
@@ -27,7 +27,7 @@ services:
       - "2211"
     environment:
       - NODE_ENV=production
-    restart: unless-stopped
+    restart: always
     networks:
       - app-network
     depends_on:
@@ -41,7 +41,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-    restart: unless-stopped
+    restart: always
     networks:
       - app-network
     depends_on:
