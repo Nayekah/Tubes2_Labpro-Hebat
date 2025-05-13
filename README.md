@@ -46,26 +46,105 @@
 </div>
 
 
+## Installation & Setup
+ 
+### Requirements
+ > - Git
+ > - Javascript
+ > - Golang
+ > - Node.js (npm)
 
+### Dependencies
+ > - Next.js
+ > - React
+ > - Gin
 
-## Getting Started
+### Installing Dependencies
 
-First, install npm (do this in /frontend folder):
-```bash
-npm install
+<a id="dependencies"></a>
+> [!IMPORTANT]  
+> If you're working with development, then go to Tubes2_Labpro-Hebat/frontend for frontend
+   ```
+   npm i
+
+   or
+
+   npm install
 ```
-Then, run the development server:
+> For backend, just install golang: https://go.dev/dl/
+> For production, please refer to "How to Run" section
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
+ ## How to Run
+ ### Frontend (development)
+ 1. Open a terminal
+ 2. Clone the repository
+       ```bash
+    git clone https://github.com/Nayekah/Tubes2_Labpro-Hebat.git
+    
+ 3. go to Tubes2_Labpro-Hebat/frontend:
+       ```bash
+    cd Tubes2_Labpro-Hebat/frontend/
+    
+ 4. Install the [dependencies](#dependencies) first
+ 5. Do: 
+    ```bash
+    npm run dev
+6. Access the frontend in [http://localhost:3000](http://localhost:3000)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ ### Backend (development)
+ 1. Open a terminal
+ 2. Clone the repository
+       ```bash
+    git clone https://github.com/Nayekah/Tubes2_Labpro-Hebat.git
+    
+ 3. go to Tubes2_Labpro-Hebat/backend:
+       ```bash
+    cd Tubes2_Labpro-Hebat/backend
+    
+ 4. Install the [dependencies](#dependencies) first
+ 5. Do: 
+    ```bash
+    go run main.go
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+> [!Note]
+> Make sure that all of the dependencies are already installed
+
+ ### Frontend and Backend (development w/ docker)
+ 1. Open a terminal
+ 2. Clone the repository
+       ```bash
+    git clone https://github.com/Nayekah/Tubes2_Labpro-Hebat.git
+    
+ 3. go to Tubes2_Labpro-Hebat:
+       ```bash
+    cd Tubes2_Labpro-Hebat/
+    
+ 5. Do: 
+    ```bash
+    docker-compose -f docker-compose.yml up --build
+6. Access the web in [http://localhost:2211](http://localhost:2211)
+   
+ ### Frontend and Backend (production w/ docker)
+ 1. Open a terminal
+ 2. Clone the repository
+       ```bash
+    git clone https://github.com/Nayekah/Tubes2_Labpro-Hebat.git
+    
+ 3. go to Tubes2_Labpro-Hebat:
+       ```bash
+    cd Tubes2_Labpro-Hebat/
+    
+ 5. Do: 
+    ```bash
+    docker-compose -f docker-compose.prod.yml up --build
+6. Access the web in [http://seleksiasistenlabpro.xyz](http://seleksiasistenlabpro.xyz)
+
+ <br/>
+ <br/>
+ <br/>
+ <br/>
+ 
+ <div align="center">
+ Strategi Algoritma • © 2025 • Labpro Hebat
+ </div>
