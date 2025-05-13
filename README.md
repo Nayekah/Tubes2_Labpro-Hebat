@@ -45,6 +45,7 @@
   </p>
 </div>
 
+Labpro Hebat is Web-Based Application to search for recipe from Little Alchemy 2 game. This application implements DFS, BFS, and Bidirectional search to search for the target recipe. For BFS and DFS, the app will start searching from the parent (the target element), and ends if all the leaf is base elements.
 
 ## Installation & Setup
  
