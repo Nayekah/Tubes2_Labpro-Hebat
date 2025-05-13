@@ -2,9 +2,60 @@
 
 import { useRef, useState, useEffect } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
-import { OrbitControls, Box, Sphere, Environment } from "@react-three/drei"
+import { OrbitControls, Box, Sphere, Environment, Text, Ring } from "@react-three/drei"
 import useFade from "./fade-effect"
 import { useTheme } from "next-themes"
+
+function ContributorRing({ contributors }) {
+  const groupRef = useRef()
+  const { theme } = useTheme()
+  
+  useFrame((state) => {
+    const time = state.clock.getElapsedTime()
+    groupRef.current.rotation.y = time * 0.2
+  })
+  
+  return (
+    <group ref={groupRef}>
+      {/* Ring */}
+      <Ring
+        args={[2.8, 3, 64]}
+        rotation={[Math.PI / 2, 0, 0]}
+        position={[0, 0, 0]}
+      >
+        <meshBasicMaterial 
+          color={theme === 'dark' ? "#4b5563" : "#d1d5db"} 
+          opacity={0.3}
+          transparent
+        />
+      </Ring>
+      
+      {/* Contributors positioned on the ring */}
+      {contributors.map((contributor, index) => {
+        const angle = (Math.PI * 2 * index) / contributors.length
+        const radius = 2.9
+        
+        return (
+          <Text
+            key={contributor.id}
+            position={[
+              Math.cos(angle) * radius,
+              0,
+              Math.sin(angle) * radius
+            ]}
+            fontSize={0.2}
+            color={theme === 'dark' ? "#9ca3af" : "#6b7280"}
+            anchorX="center"
+            anchorY="middle"
+            font="/fonts/helvetica.woff"
+          >
+            {contributor.name}
+          </Text>
+        )
+      })}
+    </group>
+  )
+}
 
 function WireframeSphere() {
   const sphereRef = useRef()
@@ -13,6 +64,12 @@ function WireframeSphere() {
   const [sphereOpacity, setSphereOpacity] = useState(0)
   const [boxOpacity, setBoxOpacity] = useState(0)
   const { theme } = useTheme()
+
+  const contributors = [
+    { name: "countz_zero", id: "10122010" },
+    { name: "Farr36", id: "13523069" },
+    { name: "Nayekah", id: "13523090" }
+  ]
 
   useEffect(() => {
     const boxFadeIn = setTimeout(() => {
@@ -69,6 +126,8 @@ function WireframeSphere() {
       >
         <meshStandardMaterial wireframe color={sphereColor} transparent opacity={sphereOpacity} />
       </Sphere>
+      
+      <ContributorRing contributors={contributors} />
     </>
   )
 }
