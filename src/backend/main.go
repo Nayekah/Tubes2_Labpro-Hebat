@@ -108,6 +108,7 @@ type requestData struct {
 }
 
 var recipes map[string][]pair = make(map[string][]pair)
+var nextElements map[string][]string = make(map[string][]string)
 var imagesLink map[string]string = make(map[string]string)
 var distances map[string]int = make(map[string]int)
 
@@ -223,6 +224,8 @@ func readRecipes() {
 		ingredient2 := record[2]
 
 		recipes[result] = append(recipes[result], pair{ingredient1, ingredient2})
+		nextElements[ingredient1] = append(nextElements[ingredient1], result)
+		nextElements[ingredient2] = append(nextElements[ingredient2], result)
 
 		distances[result] = -1
 		distances[ingredient1] = -1
@@ -266,7 +269,6 @@ func findAllDistances() {
 	distances["Air"] = 0
 	distances["Water"] = 0
 	distances["Earth"] = 0
-	distances["Water"] = 0
 	distances["Fire"] = 0
 	distances["Time"] = 0
 
@@ -757,7 +759,7 @@ func multiDFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 
 				// DFS step: add children to the stack
 				for _, pair := range recipes[n.now] {
-					if atomic.LoadInt32(&counter) < int32(count) - 1 {
+					if atomic.LoadInt32(&counter) < int32(count)-1 {
 						atomic.AddInt32(&counter, 1)
 
 						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
@@ -1011,7 +1013,7 @@ func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 
 				// Handle BFS step and enqueue new nodes
 				for _, pair := range recipes[n.now] {
-					if atomic.LoadInt32(&counter) < int32(count) - 1 {
+					if atomic.LoadInt32(&counter) < int32(count)-1 {
 						atomic.AddInt32(&counter, 1)
 
 						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
@@ -1115,6 +1117,238 @@ func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 	return images, lines
 }
 
+func BidirectionalSearch(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
+	visitedBySource := make(map[string]bool)
+	visitedByTarget := make(map[string]bool)
+
+	var IdCount int32
+	atomic.StoreInt32(&IdCount, 0)
+
+	MapTree := make(map[string]*tree)
+	for key := range recipes {
+		MapTree[key] = &tree{now: key}
+	}
+	MapTree["Earth"] = &tree{now: "Earth"}
+	MapTree["Time"] = &tree{now: "Time"}
+
+	queueSource := []*tree{MapTree["Earth"], MapTree["Water"], MapTree["Air"], MapTree["Fire"], MapTree["Time"]}
+	queueTarget := []*tree{MapTree[target]}
+
+	MapTree["Earth"].id = int(atomic.AddInt32(&IdCount, 1))
+	MapTree["Time"].id = int(atomic.AddInt32(&IdCount, 1))
+	MapTree["Air"].id = int(atomic.AddInt32(&IdCount, 1))
+	MapTree["Water"].id = int(atomic.AddInt32(&IdCount, 1))
+	MapTree["Fire"].id = int(atomic.AddInt32(&IdCount, 1))
+	MapTree[target].id = int(atomic.AddInt32(&IdCount, 1))
+
+	visitOrder := make([]*tree, 0)
+	visitOrder = append(visitOrder, MapTree["Earth"], MapTree["Water"], MapTree["Air"], MapTree["Fire"], MapTree["Time"], MapTree[target])
+	var visitOrderMu sync.Mutex
+
+	// Mutexes for safe concurrent map access
+	var muSource sync.RWMutex
+	var muTarget sync.RWMutex
+
+	for len(queueSource) > 0 && len(queueTarget) > 0 {
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		// BFS from source
+		go func() {
+			defer wg.Done()
+			for len(queueSource) > 0 {
+				node := queueSource[0]
+				queueSource = queueSource[1:]
+
+				muSource.RLock()
+				muTarget.RLock()
+				if visitedBySource[node.now] || len(node.children) > 0 {
+					muSource.RUnlock()
+					muTarget.RUnlock()
+					continue
+				}
+				muTarget.RUnlock()
+				muSource.RUnlock()
+
+				muSource.Lock()
+				visitedBySource[node.now] = true
+				muSource.Unlock()
+
+				for _, next := range nextElements[node.now] {
+					for _, pair := range recipes[next] {
+						muSource.RLock()
+						can1 := visitedBySource[pair.First]
+						can2 := visitedBySource[pair.Second]
+						muSource.RUnlock()
+
+						if can1 && can2 {
+							queueSource = append(queueSource, MapTree[next])
+
+							MapTree[next].depth = node.depth + 1
+							MapTree[next].parent = node
+							MapTree[next].children = append(MapTree[next].children, MapTree[pair.First], MapTree[pair.Second])
+							MapTree[next].id = int(atomic.AddInt32(&IdCount, 1))
+
+							fmt.Println(next, " -> ", pair.First, pair.Second)
+							visitOrderMu.Lock()
+							visitOrder = append(visitOrder, MapTree[next])
+							visitOrderMu.Unlock()
+							break
+						}
+					}
+				}
+			}
+		}()
+
+		// BFS from target
+		go func() {
+			defer wg.Done()
+			for len(queueTarget) > 0 {
+				node := queueTarget[0]
+				queueTarget = queueTarget[1:]
+
+				muSource.RLock()
+				muTarget.RLock()
+				if visitedByTarget[node.now] || visitedBySource[node.now] {
+					muSource.RUnlock()
+					muTarget.RUnlock()
+					continue
+				}
+				muTarget.RUnlock()
+				muSource.RUnlock()
+
+				muTarget.Lock()
+				visitedByTarget[node.now] = true
+				muTarget.Unlock()
+
+				for _, pair := range recipes[node.now] {
+					d1 := distances[pair.First]
+					d2 := distances[pair.Second]
+					d := distances[node.now]
+					if max(d1, d2)+1 == d {
+						muTarget.RLock()
+						vt1 := visitedByTarget[pair.First]
+						vt2 := visitedByTarget[pair.Second]
+						muTarget.RUnlock()
+
+						if !vt1 && !vt2 {
+							queueTarget = append(queueTarget, MapTree[pair.First], MapTree[pair.Second])
+
+							visitOrderMu.Lock()
+							visitOrder = append(visitOrder, MapTree[pair.First], MapTree[pair.Second])
+							visitOrderMu.Unlock()
+
+							MapTree[pair.First].depth = node.depth + 1
+							MapTree[pair.First].parent = node
+							MapTree[pair.First].id = int(atomic.AddInt32(&IdCount, 1))
+
+							MapTree[pair.Second].depth = node.depth + 1
+							MapTree[pair.Second].parent = node
+							MapTree[pair.Second].id = int(atomic.AddInt32(&IdCount, 1))
+
+							MapTree[node.now].children = append(MapTree[node.now].children, MapTree[pair.First], MapTree[pair.Second])
+							break
+						}
+					}
+				}
+			}
+		}()
+
+		wg.Wait()
+	}
+
+	// make unique
+	uniqueVisitOrder := make([]*tree, 0, len(visitOrder))
+	seen := make(map[string]bool)
+
+	for _, node := range visitOrder {
+		if !seen[node.now] {
+			seen[node.now] = true
+			uniqueVisitOrder = append(uniqueVisitOrder, node)
+		}
+	}
+
+	for _, node := range visitOrder {
+		fmt.Println("Node:", node.now)
+	}
+
+	fmt.Println("Unique visit order:")
+	for _, node := range uniqueVisitOrder {
+		fmt.Println("Node:", node.now)
+	}
+
+	visitOrder = uniqueVisitOrder
+
+	// Output visited nodes (debug/log)
+	for _, node := range visitOrder {
+		// muSource.RLock()
+		// visitedBySrc := visitedBySource[node.now]
+		// muSource.RUnlock()
+		// if visitedBySrc {
+		// 	fmt.Println("visited by Source,", "Node:", node.now, "Depth:", node.depth)
+		// } else {
+		// 	fmt.Println("visited by Target,", "Node:", node.now, "Depth:", node.depth)
+		// }
+
+		fmt.Println("Node:", node.now, "Depth:", distances[node.now], "ID:", node.id)
+	}
+
+	images := make([]ImageInfo, 0)
+	lines := make([]LineInfo, 0)
+
+	countLevel := make(map[int]int)
+	for _, node := range visitOrder {
+		node.posX = 400 * countLevel[distances[node.now]]
+		node.posY = 400 * distances[node.now]
+		countLevel[distances[node.now]]++
+	}
+
+	for _, node := range visitOrder {
+		//normalize so that center is 0
+		node.posX -= 400 * countLevel[distances[node.now]] / 2
+		node.posY -= 400 * distances[node.now] / 2
+
+		images = append(images, ImageInfo{
+			Link: getImageURL(c, strings.ReplaceAll(node.now, " ", "_")),
+			Row:  node.posY,
+			Col:  node.posX,
+			Name: node.now,
+			Id:   node.id,
+		})
+	}
+
+	for _, node := range visitOrder {
+		if len(node.children) == 0 {
+			continue
+		}
+
+		left := node.children[0]
+		right := node.children[1]
+
+		//lines from left to node
+		lines = append(lines, LineInfo{
+			From_x:  left.posX,
+			From_y:  left.posY,
+			From_Id: left.id,
+			To_x:    node.posX,
+			To_y:    node.posY,
+			To_Id:   node.id,
+		})
+
+		//lines from right to node
+		lines = append(lines, LineInfo{
+			From_x:  right.posX,
+			From_y:  right.posY,
+			From_Id: right.id,
+			To_x:    node.posX,
+			To_y:    node.posY,
+			To_Id:   node.id,
+		})
+	}
+
+	return images, lines
+}
+
 // API handlers
 func handleSearch(c *gin.Context) {
 	var data requestData
@@ -1157,8 +1391,7 @@ func handleSearch(c *gin.Context) {
 			images, lines = multiBFS(c, target, num_of_recipes)
 		}
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid method"})
-		return
+		images, lines = BidirectionalSearch(c, target)
 	}
 
 	response := Response{

@@ -236,7 +236,7 @@ function BurgerMenu({ isLoading, fetchHandler, parameter, onParameterChange, loa
           </div>
         </div> */}
 
-        {isLastOptionSelected && (
+        {isLastOptionSelected && parameter.method !== "Bidirectional" && (
           <div className="multiple-extra-option">
             <label className="text-gray-700 dark:text-gray-300">
               {t.recipesQuestion}
