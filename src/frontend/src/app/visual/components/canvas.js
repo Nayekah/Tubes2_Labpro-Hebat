@@ -95,6 +95,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     setLines([]);
     imageMapRef.current.clear();
     setImageIds([]);
+    setError(null);
 
     let test = loading;
     console.log(test);
@@ -150,6 +151,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
           method: searchParameter.method,
           option: searchParameter.option,
           num_of_recipes: Number(searchParameter.numOfRecipes),
+          include_higher: searchParameter.includeHigher,
         }),
       });
 
@@ -352,6 +354,7 @@ export default function KonvaCanvas({ onTerminalMessage }) {
     numOfRecipes: 1,
     delay: 100,
     includeTime: true,
+    includeHigher: true,
   });
 
   const handleParameterChange = (e) => {

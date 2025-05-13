@@ -100,10 +100,11 @@ type Response struct {
 }
 
 type requestData struct {
-	Target       string `json:"target"`
-	Method       string `json:"method"`
-	Option       string `json:"option"`
-	NumOfRecipes int    `json:"num_of_recipes"`
+	Target        string `json:"target"`
+	Method        string `json:"method"`
+	Option        string `json:"option"`
+	NumOfRecipes  int    `json:"num_of_recipes"`
+	IncludeHigher bool   `json:"include_higher"`
 	// nanti tambahin tambahin terserah
 }
 
@@ -719,7 +720,7 @@ func singleDFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 	return images, lines
 }
 
-func multiDFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo) {
+func multiDFS(c *gin.Context, target string, count int, includeHigher bool) ([]ImageInfo, []LineInfo) {
 	countId := 0
 	counter := int32(0)
 
@@ -759,20 +760,34 @@ func multiDFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 
 				// DFS step: add children to the stack
 				for _, pair := range recipes[n.now] {
-					if atomic.LoadInt32(&counter) < int32(count)-1 {
-						atomic.AddInt32(&counter, 1)
+					if includeHigher {
+						if atomic.LoadInt32(&counter) < int32(count)-1 {
+							atomic.AddInt32(&counter, 1)
 
-						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
-						right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
-						n.children = append(n.children, left, right)
-						n.childCount += 2
+							left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+							right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+							n.children = append(n.children, left, right)
+							n.childCount += 2
 
-						safe.mu.Lock()
-						// Push in reverse order for DFS
-						safe.stack = append(safe.stack, right, left)
-						safe.mu.Unlock()
+							safe.mu.Lock()
+							// Push in reverse order for DFS
+							safe.stack = append(safe.stack, right, left)
+							safe.mu.Unlock()
+						} else {
+							if max(distances[pair.First], distances[pair.Second]) < distances[n.now] {
+								left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+								right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+								n.children = append(n.children, left, right)
+								n.childCount += 2
+
+								safe.mu.Lock()
+								safe.stack = append(safe.stack, right, left)
+								safe.mu.Unlock()
+								break
+							}
+						}
 					} else {
-						if max(distances[pair.First], distances[pair.Second]) < distances[n.now] {
+						if max(distances[pair.First], distances[pair.Second]) < distances[n.now] && atomic.LoadInt32(&counter) < int32(count)-1 {
 							left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
 							right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
 							n.children = append(n.children, left, right)
@@ -781,7 +796,18 @@ func multiDFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 							safe.mu.Lock()
 							safe.stack = append(safe.stack, right, left)
 							safe.mu.Unlock()
-							break
+						} else {
+							if max(distances[pair.First], distances[pair.Second]) < distances[n.now] {
+								left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+								right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+								n.children = append(n.children, left, right)
+								n.childCount += 2
+
+								safe.mu.Lock()
+								safe.stack = append(safe.stack, right, left)
+								safe.mu.Unlock()
+								break
+							}
 						}
 					}
 				}
@@ -973,7 +999,7 @@ func singleBFS(c *gin.Context, target string) ([]ImageInfo, []LineInfo) {
 	return images, lines
 }
 
-func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo) {
+func multiBFS(c *gin.Context, target string, count int, includeHigher bool) ([]ImageInfo, []LineInfo) {
 	countId := 0
 	counter := int32(0)
 
@@ -1013,19 +1039,10 @@ func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 
 				// Handle BFS step and enqueue new nodes
 				for _, pair := range recipes[n.now] {
-					if atomic.LoadInt32(&counter) < int32(count)-1 {
-						atomic.AddInt32(&counter, 1)
+					if includeHigher {
+						if atomic.LoadInt32(&counter) < int32(count)-1 {
+							atomic.AddInt32(&counter, 1)
 
-						left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
-						right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
-						n.children = append(n.children, left, right)
-						n.childCount += 2
-
-						safe.mu.Lock()
-						safe.queue = append(safe.queue, left, right)
-						safe.mu.Unlock()
-					} else {
-						if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] {
 							left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
 							right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
 							n.children = append(n.children, left, right)
@@ -1034,7 +1051,43 @@ func multiBFS(c *gin.Context, target string, count int) ([]ImageInfo, []LineInfo
 							safe.mu.Lock()
 							safe.queue = append(safe.queue, left, right)
 							safe.mu.Unlock()
-							break
+						} else {
+							if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] {
+								left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+								right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+								n.children = append(n.children, left, right)
+								n.childCount += 2
+
+								safe.mu.Lock()
+								safe.queue = append(safe.queue, left, right)
+								safe.mu.Unlock()
+								break
+							}
+						}
+					} else {
+						if max(distances[pair.First], distances[pair.Second])+1 <= distances[n.now] && atomic.LoadInt32(&counter) < int32(count)-1 {
+							atomic.AddInt32(&counter, 1)
+
+							left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+							right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+							n.children = append(n.children, left, right)
+							n.childCount += 2
+
+							safe.mu.Lock()
+							safe.queue = append(safe.queue, left, right)
+							safe.mu.Unlock()
+						} else {
+							if max(distances[pair.First], distances[pair.Second])+1 == distances[n.now] {
+								left := &tree{now: pair.First, depth: n.depth + 1, parent: n}
+								right := &tree{now: pair.Second, depth: n.depth + 1, parent: n}
+								n.children = append(n.children, left, right)
+								n.childCount += 2
+
+								safe.mu.Lock()
+								safe.queue = append(safe.queue, left, right)
+								safe.mu.Unlock()
+								break
+							}
 						}
 					}
 				}
@@ -1363,6 +1416,7 @@ func handleSearch(c *gin.Context) {
 	method := data.Method
 	option := data.Option
 	num_of_recipes := data.NumOfRecipes
+	include_higher := data.IncludeHigher
 
 	runes := []rune(target)
 	for i := 1; i < len(runes); i++ {
@@ -1382,13 +1436,13 @@ func handleSearch(c *gin.Context) {
 		if option == "Shortest" {
 			images, lines = singleDFS(c, target)
 		} else {
-			images, lines = multiDFS(c, target, num_of_recipes)
+			images, lines = multiDFS(c, target, num_of_recipes, include_higher)
 		}
 	} else if method == "BFS" {
 		if option == "Shortest" {
 			images, lines = singleBFS(c, target)
 		} else {
-			images, lines = multiBFS(c, target, num_of_recipes)
+			images, lines = multiBFS(c, target, num_of_recipes, include_higher)
 		}
 	} else {
 		images, lines = BidirectionalSearch(c, target)

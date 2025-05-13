@@ -28,6 +28,7 @@ function BurgerMenu({ isLoading, fetchHandler, parameter, onParameterChange, loa
       visualizationDelay: "Jeda Visualisasi (ms):",
       recipesQuestion: "Berapa banyak resep?",
       includeTime: "Sertakan waktu sebagai element dasar?",
+      includeHigher: "Sertakan element dengan tier lebih tinggi dalam pencarian?",
       errors: {
         recipeRequired: "Jumlah resep diperlukan",
         mustBeInteger: "Harus berupa bilangan bulat",
@@ -47,6 +48,7 @@ function BurgerMenu({ isLoading, fetchHandler, parameter, onParameterChange, loa
       visualizationDelay: "Visualization Delay (ms):",
       recipesQuestion: "How many recipes?",
       includeTime: "Include time as base element?",
+      includeHigher: "Include elements with higher tier in search?",
       errors: {
         recipeRequired: "Recipe count is required",
         mustBeInteger: "Must be an integer",
@@ -176,7 +178,7 @@ function BurgerMenu({ isLoading, fetchHandler, parameter, onParameterChange, loa
           ))}
         </select>
 
-        { parameter.method !== "Bidirectional" && (
+        {parameter.method !== "Bidirectional" && (
           <>
             <label className="text-gray-700 dark:text-gray-300">{t.option}</label>
             <select
@@ -208,49 +210,42 @@ function BurgerMenu({ isLoading, fetchHandler, parameter, onParameterChange, loa
           </label>
         </div>
 
-        {/* <div className="flex items-center justify-between mt-2">
-          <label htmlFor="includeTimeToggle" className="text-gray-700 dark:text-gray-300">
-            {t.includeTime}
-          </label>
-
-          <div className="relative inline-block w-12 h-6">
-            <input
-              id="includeTimeToggle"
-              type="checkbox"
-              name="includeTime"
-              checked={parameter.includeTime}
-              onChange={() =>
-                onParameterChange({
-                  target: {
-                    name: "includeTime",
-                    value: !parameter.includeTime,
-                  },
-                })
-              }
-              className="sr-only peer"
-              style={{ width: "100%", height: "100%", position: "absolute", left: 0, top: 0, zIndex: 2, cursor: "pointer" }}
-              tabIndex={0}
-            />
-            <div className="w-full h-full bg-gray-300 dark:bg-gray-700 rounded-full transition-colors duration-300 peer-checked:bg-green-500 pointer-events-none"></div>
-            <div className="absolute top-0 left-0 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-300 peer-checked:translate-x-6 pointer-events-none"></div>
-          </div>
-        </div> */}
-
         {isLastOptionSelected && parameter.method !== "Bidirectional" && (
-          <div className="multiple-extra-option">
-            <label className="text-gray-700 dark:text-gray-300">
-              {t.recipesQuestion}
-              <Input
-                className="value-form bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-600"
-                name="numOfRecipes"
-                type="text"
-                value={parameter.numOfRecipes}
-                onChange={handleInputChange}
-                required={isLastOptionSelected}
-              />
-              {errors.numOfRecipes && <span className="text-red-500 text-sm mt-1">{errors.numOfRecipes}</span>}
-            </label>
-          </div>
+          <>
+            <div className="multiple-extra-option">
+              <label className="text-gray-700 dark:text-gray-300">
+                {t.recipesQuestion}
+                <Input
+                  className="value-form bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-600"
+                  name="numOfRecipes"
+                  type="text"
+                  value={parameter.numOfRecipes}
+                  onChange={handleInputChange}
+                  required={isLastOptionSelected}
+                />
+                {errors.numOfRecipes && <span className="text-red-500 text-sm mt-1">{errors.numOfRecipes}</span>}
+              </label>
+            </div>
+            <div className="flex items-center justify-between mt-2 pr-4">
+              <label className="text-gray-700 dark:text-gray-300 w-[60%]">{t.includeHigher}</label>
+
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={parameter.includeHigher}
+                  onChange={() =>
+                    onParameterChange({
+                      target: {
+                        name: "includeHigher",
+                        value: !parameter.includeHigher,
+                      },
+                    })
+                  }
+                />
+                <span className="slider"></span>
+              </label>
+            </div>
+          </>
         )}
       </div>
 
